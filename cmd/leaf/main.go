@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/khaledmdiab/horus_controller/ctrl_leaf"
+	ctrl_leaf "github.com/khaledmdiab/horus_controller/ctrl_leaf"
 )
 
 func main() {

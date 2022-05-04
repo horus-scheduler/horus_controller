@@ -1,10 +1,10 @@
-# This is a configuration file for mDC switch controller
+# This is a configuration file for Horus Spine controller
 
-title = "mDC switch controller"
+title = "Horus Spine controller"
 
 [tor]
 torId = 0
-#sockPath = "u:/tmp/mdc_dp_p.sock" # "u:UNIX_SOC_PATH" or "r:INTERFACE_NAME"
+#sockPath = "u:/tmp/horus_dp_p.sock" # "u:UNIX_SOC_PATH" or "r:INTERFACE_NAME"
 sockPath = "r:nf0" # "u:UNIX_SOC_PATH" or "r:INTERFACE_NAME"
 healthyNodeTimeOut = 75 # in Milliseconds
 

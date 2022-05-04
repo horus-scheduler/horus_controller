@@ -2,14 +2,15 @@ package net
 
 import (
 	"context"
-	"github.com/khaledmdiab/horus_controller/core/model"
-	"github.com/khaledmdiab/horus_controller/protobuf"
 	"errors"
-	"github.com/processout/grpc-go-pool"
-	"google.golang.org/grpc"
 	"log"
 	"net"
 	"time"
+
+	"github.com/khaledmdiab/horus_controller/core/model"
+	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
+	grpcpool "github.com/processout/grpc-go-pool"
+	"google.golang.org/grpc"
 )
 
 // Two Rpc Endpoints: App <-> Controller and ToR <-> Controller
@@ -17,9 +18,9 @@ type CentralRpcEndpoint struct {
 	appLAddr string
 	torLAddr string
 
-	appIngressEvents chan *mdc_pb.MdcAppEvent
-	torIngressEvents chan *mdc_pb.MdcSyncEvent
-	torEgressEvents  chan *mdc_pb.MdcSessionUpdateEvent // to ToR
+	appIngressEvents chan *horus_pb.MdcAppEvent
+	torIngressEvents chan *horus_pb.MdcSyncEvent
+	torEgressEvents  chan *horus_pb.MdcSessionUpdateEvent // to ToR
 
 	torNodes    []*model.Node
 	torConnPool []*grpcpool.Pool
@@ -28,9 +29,9 @@ type CentralRpcEndpoint struct {
 }
 
 func NewCentralRpcEndpoint(appLAddr, torLAddr string, torNodes []*model.Node,
-	appIngressEvents chan *mdc_pb.MdcAppEvent,
-	torIngressEvents chan *mdc_pb.MdcSyncEvent,
-	torEgressEvents chan *mdc_pb.MdcSessionUpdateEvent,
+	appIngressEvents chan *horus_pb.MdcAppEvent,
+	torIngressEvents chan *horus_pb.MdcSyncEvent,
+	torEgressEvents chan *horus_pb.MdcSessionUpdateEvent,
 ) *CentralRpcEndpoint {
 	torCount := len(torNodes)
 	connPool := make([]*grpcpool.Pool, torCount)
@@ -54,7 +55,7 @@ func (s *CentralRpcEndpoint) createAppListener() error {
 	}
 	rpcServer := grpc.NewServer()
 	appServer := NewAppServer(s.appIngressEvents)
-	mdc_pb.RegisterMdcAppNotifierServer(rpcServer, appServer)
+	horus_pb.RegisterMdcAppNotifierServer(rpcServer, appServer)
 	return rpcServer.Serve(lis)
 }
 
@@ -66,7 +67,7 @@ func (s *CentralRpcEndpoint) createTorListener() error {
 	}
 	rpcServer := grpc.NewServer()
 	torServer := NewTorServer(s.torIngressEvents)
-	mdc_pb.RegisterMdcControllerNotifierServer(rpcServer, torServer)
+	horus_pb.RegisterMdcControllerNotifierServer(rpcServer, torServer)
 	return rpcServer.Serve(lis)
 }
 
@@ -87,7 +88,7 @@ func (s *CentralRpcEndpoint) createTorConnPool(torAddr string) *grpcpool.Pool {
 	return connPool
 }
 
-func (s *CentralRpcEndpoint) sendUpdateStateEvent(e *mdc_pb.MdcSessionUpdateEvent) error {
+func (s *CentralRpcEndpoint) sendUpdateStateEvent(e *horus_pb.MdcSessionUpdateEvent) error {
 	if e.TorId < 0 || e.TorId >= uint32(len(s.torConnPool)) {
 		return errors.New("invalid tor id")
 	}
@@ -98,7 +99,7 @@ func (s *CentralRpcEndpoint) sendUpdateStateEvent(e *mdc_pb.MdcSessionUpdateEven
 	}
 	defer conn.Close()
 
-	client := mdc_pb.NewMdcSessionUpdaterClient(conn.ClientConn)
+	client := horus_pb.NewMdcSessionUpdaterClient(conn.ClientConn)
 	_, err = client.UpdateState(context.Background(), e)
 	return err
 }

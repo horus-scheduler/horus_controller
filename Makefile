@@ -6,19 +6,19 @@ PKG_NAME=github.com/khaledmdiab/horus_controller
 EXEC_PKGS = ctrl_central ctrl_leaf ctrl_spine
 CORE_PKGS = $(sort $(dir $(wildcard core/*/)))
 FMT := $(shell go fmt)
-TIDY := $(shell go mod tidy)
+MODULES := $(shell go mod tidy)
 
-all: clean tidy fmt proto
+all: clean modules fmt proto
 	@echo ""
 	@echo "- Building..."
 	mkdir -p bin
-	go build -o bin/${TARGET_CC} -race -v central_ctrl.go
-	go build -o bin/${TARGET_LEAF} -race -v leaf_ctrl.go
-	go build -o bin/${TARGET_SPINE} -race -v spine_ctrl.go
+	go build -o bin/${TARGET_CC} -race -v cmd/centralized/main.go
+	go build -o bin/${TARGET_LEAF} -race -v cmd/leaf/main.go
+	go build -o bin/${TARGET_SPINE} -race -v cmd/spine/main.go
 
-tidy:
-	@echo "-- Output of go mod tidy:"
-	@echo $(TIDY)
+modules:
+	@echo "-- Output of go mod modules:"
+	@echo $(MODULES)
 	@echo ""
 	@echo "---------------------------------------------"
 
@@ -34,11 +34,11 @@ fmt:
 	@echo "---------------------------------------------"
 
 dummy_client:
-	go build -o bin/dummy-client -race -v dummy_client.go
+	go build -o bin/dummy-client -race -v cmd/dummy/main.go
 
 proto:
 	@echo "-- Generating Protocol Buffers:"
-	protoc -I=./protobuf --go_out=./protobuf ./protobuf/message.proto
+	protoc -I=./protobuf --go_out=./protobuf --go-grpc_out=./protobuf ./protobuf/message.proto
 	@echo ""
 	@echo "---------------------------------------------"
 

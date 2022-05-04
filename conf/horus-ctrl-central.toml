@@ -1,6 +1,6 @@
-# This is a configuration file for mDC centralized controller
+# This is a configuration file for Horus centralized controller
 
-title = "mDC centralizer controller"
+title = "Horus centralizer controller"
 
 [rpc]
     [rpc.local]

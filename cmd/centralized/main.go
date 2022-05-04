@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/khaledmdiab/horus_controller/ctrl_central"
+	ctrl_central "github.com/khaledmdiab/horus_controller/ctrl_central"
 )
 
 func main() {
