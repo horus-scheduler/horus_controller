@@ -1,0 +1,119 @@
+syntax = "proto3";
+package horus.pb;
+
+
+// golang:
+// $ cd <golang_project_path>/protobuf
+// $ protoc -I . message.proto --go_out=plugins=grpc:.
+
+// python:
+// $ cd <golang_project_path>/protobuf
+// $ pyenv activate <virtualenv>
+// $ python -m grpc_tools.protoc -I. --python_out=<py_project_path>/protobuf/ --grpc_python_out=<py_project_path>/protobuf/ message.proto
+
+// Terminologies
+// Agent
+// Controller
+// ToR
+// App
+
+// common messages
+
+// generic response
+message MdcEventResponse {
+    string status = 1;
+}
+
+// from Controller to ToR to update sessions
+message MdcSessionUpdateEvent {
+    uint32 torId = 1;
+    uint32 sequenceId = 2;
+    message SessionLabel {
+        bytes sessionAddress = 1;
+        uint32 label = 2;
+    }
+    repeated SessionLabel sessions = 3;
+}
+
+// from Controller to ToR (ToR of source, and ToRs of all receivers)
+service MdcSessionUpdater {
+    rpc UpdateState (MdcSessionUpdateEvent) returns (MdcEventResponse) {}
+}
+
+///////////////////////////************** ******************///////////////////////////
+
+// from ToR to controller to confirm the updates
+message MdcSyncEvent {
+    uint32 torId = 1;
+    uint32 sequenceId = 2;
+    repeated bytes sessionAddresses = 3;
+}
+
+// from ToR to controller
+service MdcControllerNotifier {
+    rpc SyncState (MdcSyncEvent) returns (MdcEventResponse) {}
+    rpc SyncDone (MdcSyncEvent) returns (MdcEventResponse) {}
+}
+
+
+///////////////////////////************** ******************///////////////////////////
+
+// Controller-App messages (from App to Controller)
+message MdcAppEvent {
+    bytes sessionAddress = 1;
+    uint32 torId = 2;
+    uint32 hostId = 3;
+    EventType type = 4;
+    float timeIdx = 5;
+
+    enum EventType {
+        Create = 0;
+        Join = 1;
+        Leave = 2;
+    }
+}
+
+// from App to Controller to initialize Agent
+service MdcAppNotifier {
+    rpc StartSession(MdcAppEvent) returns (MdcEventResponse) {}
+    rpc JoinSession(MdcAppEvent) returns (MdcEventResponse) {}
+    rpc LeaveSession(MdcAppEvent) returns (MdcEventResponse) {}
+}
+
+///////////////////////////************** ******************///////////////////////////
+
+//// Controller-Agent messages (from Agent to Controller)
+//service MdcAgentNotifier {
+//    rpc Sync(MdcAgentEvent) returns (MdcEventResponse) {}
+//    rpc RequestSessions(MdcAgentSessionRequestEvent) returns (MdcEventResponse) {}
+//}
+//
+//// from Agent or ToR to Controller to initialize Agent
+//message MdcAgentEvent {
+//    string agentAddress = 1;
+//    AgentStatus status = 2;
+//    float timeIdx = 3;
+//
+//    enum AgentStatus {
+//        Initializing = 0; // from Agent
+//        Started = 1; // from Agent
+//        Failed = 2; // from ToR control plane
+//    }
+//}
+//
+//// from Agent to Controller to request session-label mapping
+//message MdcAgentSessionRequestEvent {
+//    string sessionAddress = 1;
+//    float timeIdx = 2;
+//}
+
+
+
+
+///////////////////////////************** ******************///////////////////////////
+
+//// Controller-ToR messages (from Controller to ToR)
+//service MdcToRNotifier {
+//    // from controller to ToR
+//    rpc UpdateState(MdcSessionUpdateEvent) returns (MdcEventResponse) {}
+//}

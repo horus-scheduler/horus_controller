@@ -1,0 +1,17 @@
+# This is a configuration file for mDC switch controller
+
+title = "mDC switch controller"
+
+[tor]
+torId = 0
+#sockPath = "u:/tmp/mdc_dp_p.sock" # "u:UNIX_SOC_PATH" or "r:INTERFACE_NAME"
+sockPath = "r:nf0" # "u:UNIX_SOC_PATH" or "r:INTERFACE_NAME"
+healthyNodeTimeOut = 75 # in Milliseconds
+
+
+[rpc]
+    [rpc.local]
+        [rpc.local.servers]
+            ctrlAddress = "0.0.0.0:6600"
+    [rpc.remote]
+        ctrlAddress = "0.0.0.0:7700"
