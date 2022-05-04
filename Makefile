@@ -38,7 +38,7 @@ dummy_client:
 
 proto:
 	@echo "-- Generating Protocol Buffers:"
-	protoc  --go_out=plugins=grpc:. ./protobuf/message.proto
+	protoc -I=./protobuf --go_out=./protobuf ./protobuf/message.proto
 	@echo ""
 	@echo "---------------------------------------------"
 

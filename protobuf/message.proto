@@ -1,5 +1,7 @@
 syntax = "proto3";
 package horus.pb;
+// option go_package = "github.com/khaledmdiab/horus_controller/protobuf";
+option go_package = ".";
 
 
 // golang:

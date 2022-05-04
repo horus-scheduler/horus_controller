@@ -5,8 +5,8 @@ import (
 
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/net"
+	"github.com/khaledmdiab/horus_controller/core/sequencer"
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
-	"github.com/khaledmdiab/horus_controller/sequencer"
 )
 
 type mdcSwitchCtrl struct {
