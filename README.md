@@ -17,13 +17,14 @@ Dependencies:
 
 We provide few scripts to install the dependencies (more testing is required):
 
-    ./scripts/env/0_install_base_deps.sh
-    ./scripts/env/1_set_go_path.sh
-    ./scripts/env/2_install_deps.sh
+    $ cd scripts/env
+    $ sudo ./0_install_base_deps.sh # IMPORTANT: will remove the current golang version!
+    $ ./1_set_go_path.sh
+    $ ./2_install_deps.sh
 
 Build:
 
-    make all
+    $ make all
 
 ## TODO
 - [ ] 
