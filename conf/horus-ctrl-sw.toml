@@ -1,0 +1,42 @@
+# This is a configuration file for Horus switch controller
+
+title = "Horus switch controller"
+
+# only for Tofino
+[asic]
+intf = "bf_pci0"
+program = "orca"
+device_id = 0
+pipe_id = 65535
+
+# used by spine and/or leaf switches
+[centralized]
+address = "0.0.0.0:4401"
+
+# used by leaf switches
+[spine]
+address = "0.0.0.0:5501"
+
+# used by spine and leaf switches
+[bfrt]
+address = "0.0.0.0:50052"
+
+[[controllers]]
+id = 1
+type = "spine"
+address = "0.0.0.0:5501"
+
+[[controllers]]
+id = 1 
+type = "leaf"
+address = "0.0.0.0:6601"
+
+[[controllers]]
+id = 2
+type = "leaf"
+address = "0.0.0.0:6602"
+
+[[controllers]]
+id = 3
+type = "leaf"
+address = "0.0.0.0:6603"
