@@ -15,30 +15,28 @@ type SwitchRpcEndpoint struct {
 	lAddress string
 	rAddress string
 
-	connPool   *grpcpool.Pool
-	updates    chan *horus_pb.MdcSessionUpdateEvent // from centralized controller
-	syncEvents chan *horus_pb.MdcSyncEvent          // to centralized controller
-	doneChan   chan bool
+	connPool *grpcpool.Pool
+	incoming chan *horus_pb.HorusMessage // incoming
+	outgoing chan *horus_pb.HorusMessage // outgoing messages
+	doneChan chan bool
 }
 
 func NewSwitchRpcEndpoint(lAddress, rAddress string,
-	rpcIngressChan chan *horus_pb.MdcSessionUpdateEvent,
-	rpcEgressChan chan *horus_pb.MdcSyncEvent) *SwitchRpcEndpoint {
+	rpcIngressChan chan *horus_pb.HorusMessage,
+	rpcEgressChan chan *horus_pb.HorusMessage) *SwitchRpcEndpoint {
 	return &SwitchRpcEndpoint{
-		lAddress:   lAddress,
-		rAddress:   rAddress,
-		updates:    rpcIngressChan,
-		syncEvents: rpcEgressChan,
-		doneChan:   make(chan bool, 1),
+		lAddress: lAddress,
+		rAddress: rAddress,
+		incoming: rpcIngressChan,
+		outgoing: rpcEgressChan,
+		doneChan: make(chan bool, 1),
 	}
 }
 
 func (s *SwitchRpcEndpoint) createListener() {
 	lis, err := net.Listen("tcp4", s.lAddress)
 	if err != nil {
-		log.Println("11")
 		log.Println(err)
-		//return err
 	}
 	rpcServer := grpc.NewServer()
 	updater := NewUpdateServer(s.updates)
@@ -53,7 +51,6 @@ func (s *SwitchRpcEndpoint) createConnPool() {
 	factory = func() (*grpc.ClientConn, error) {
 		conn, err := grpc.Dial(s.rAddress, grpc.WithInsecure())
 		if err != nil {
-			log.Println("HH")
 			log.Println(err)
 		}
 		return conn, err

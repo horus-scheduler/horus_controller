@@ -4,18 +4,18 @@ import (
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 
-	// "github.com/khaledmdiab/horus_controller/core/sequencer"
-	// horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
-	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/bfrt/client"
-	bfrtC_pb "github.com/khaledmdiab/bfrt-go-client/pkg/bfrt/pb"
+	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 )
 
 type controller struct {
 	ID      string
 	Address string
 	cfg     *rootConfig
+
+	rpcEndPoint *net.SwitchRpcEndpoint
+	healthMgr   *core.NodeHealthManager
+	localSock   *net.LocalSock
 }
 
 type leafController struct {
@@ -62,6 +62,7 @@ func NewController(opts ...SwitchCtrlOption) *switchCtrl {
 	// rpcIngressChan := make(chan *horus_pb.MdcSessionUpdateEvent, net.DefaultRpcRecvSize)
 	// rpcEgressChan := make(chan *horus_pb.MdcSyncEvent, net.DefaultRpcSendSize)
 
+	// ASIC <-> CPU interface.
 	var localSock net.LocalSock
 	localSock = net.NewRawSockClient(cfg.AsicIntf, dpSendChan, dpRecvChan)
 
@@ -130,15 +131,8 @@ func (sc *switchCtrl) init(cfg *rootConfig) {
 
 	// Init BfRt client (connection pool)
 	logrus.Infof("Connecting to BfRt gRPC server at %s", cfg.BfrtAddress)
-	//nolint:staticcheck // SA1019
-	conn, err := grpc.Dial(cfg.BfrtAddress, grpc.WithInsecure())
-	if err != nil {
-		logrus.Fatalf("Cannot connect to BfRt gRPC server: %v", err)
-	}
-	defer conn.Close()
-
-	c := bfrtC_pb.NewBfRuntimeClient(conn)
-	sc.bfrt = bfrtC.NewClient(cfg.P4Name, c, nil, "")
+	device := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
+	sc.bfrt = bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, device)
 }
 
 func (sc *switchCtrl) Run() {

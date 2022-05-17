@@ -1,13 +1,15 @@
 package net
 
 import (
-	"github.com/mdlayher/raw"
 	"io"
 	"log"
 	"net"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/mdlayher/raw"
+	"github.com/sirupsen/logrus"
 )
 
 type RawSockClient struct {
@@ -36,6 +38,7 @@ func NewRawSockClient(ifName string, sendChan chan []byte, recvChan chan []byte)
 }
 
 func (rsc *RawSockClient) Connect() error {
+	logrus.Infof("Connecting to %s", rsc.ifName)
 	var err error
 
 	rsc.connLock.Lock()
@@ -43,7 +46,7 @@ func (rsc *RawSockClient) Connect() error {
 
 	rsc.ifi, err = net.InterfaceByName(rsc.ifName)
 	if err != nil {
-		log.Printf("failed to open interface: %v\n", err)
+		return err
 	}
 
 	trialCount := 0

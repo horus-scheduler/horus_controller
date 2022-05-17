@@ -3,23 +3,13 @@
 title = "Horus centralizer controller"
 
 [rpc]
-    [rpc.local]
-        [rpc.local.servers]
-            # communicating with Apps via gRPC
-            appServerAddress = "0.0.0.0:8800"
-            # communicating with ToRs via gRPC
-            torServerAddress = "0.0.0.0:7700"
+  [rpc.servers]
+      # communicating with switches via gRPC
+      rpcAddress = "0.0.0.0:4401"
 
-[tors]
+[spines]
 # the current convention is:
-# (1) the number of hosts per ToR equals the number of ToRs in the topology.
-# (2) each ToR has an ID -starting from zero- which corresponds to its index in this list.
-# (3) the ToR ID should be enforced in the ToR controller as well.
-# otherwise, the behaviour is undefined
+# XXX
 addresses = [
-  "0.0.0.0:6600",
-  "0.0.0.0:6601",
-  "0.0.0.0:6602",
-  "0.0.0.0:6603",
+  "0.0.0.0:5501",
 ]
-

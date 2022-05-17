@@ -47,10 +47,10 @@ var LayerTypeMdc = gopacket.RegisterLayerType(
 	},
 )
 
-func InitMdcDefinitions() {
+func InitHorusDefinitions() {
 	layers.EthernetTypeMetadata[EthernetTypeMdc] = layers.EnumMetadata{
 		DecodeWith: gopacket.DecodeFunc(decodeMdc),
-		Name:       "Mdc",
+		Name:       "Horus",
 		LayerType:  LayerTypeMdc,
 	}
 }
@@ -180,7 +180,7 @@ func CreateMdcPacket(pktType MdcType, agent byte, address uint16, label uint32, 
 }
 
 func TestMdcPkt() {
-	InitMdcDefinitions()
+	InitHorusDefinitions()
 
 	if pktBytes, err := CreateMdcPacket(MdcTypePing, 0x10, 8, 512, 1); err != nil {
 		log.Println(err)

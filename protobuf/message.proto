@@ -1,23 +1,9 @@
 syntax = "proto3";
 package horus.pb;
-// option go_package = "github.com/khaledmdiab/horus_controller/protobuf";
-option go_package = ".";
-
-
-// golang:
-// $ cd <golang_project_path>/protobuf
-// $ protoc -I . message.proto --go_out=plugins=grpc:.
-
-// python:
-// $ cd <golang_project_path>/protobuf
-// $ pyenv activate <virtualenv>
-// $ python -m grpc_tools.protoc -I. --python_out=<py_project_path>/protobuf/ --grpc_python_out=<py_project_path>/protobuf/ message.proto
+//option go_package = "github.com/khaledmdiab/horus_controller/protobuf";
+option go_package = "./protobuf";
 
 // Terminologies
-// Agent
-// Controller
-// ToR
-// App
 
 // common messages
 
@@ -25,6 +11,33 @@ option go_package = ".";
 message MdcEventResponse {
     string status = 1;
 }
+
+message HorusMessage {
+    string srcID = 1;
+    string dstID = 2;
+
+    enum NodeType {
+        CENTRAL = 0;
+        SPINE = 1;
+        LEAF = 2;
+        WORKER = 3;
+    }
+    NodeType srcType = 3;
+    NodeType dstType = 4;
+    enum MessageType {
+        HELLO = 0;
+        OK = 1;
+        ERROR = 2;
+        
+    }
+    MessageType messageType = 5;
+
+    oneof message {
+        string stringMsg = 6;
+        bytes bytesMsg = 7;
+    }    
+}
+
 
 // from Controller to ToR to update sessions
 message MdcSessionUpdateEvent {
