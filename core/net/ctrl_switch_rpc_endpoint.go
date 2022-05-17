@@ -3,7 +3,6 @@ package net
 import (
 	"context"
 	"log"
-	"net"
 	"time"
 
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
@@ -16,7 +15,7 @@ type SwitchRpcEndpoint struct {
 	rAddress string
 
 	connPool *grpcpool.Pool
-	incoming chan *horus_pb.HorusMessage // incoming
+	incoming chan *horus_pb.HorusMessage // incoming messages
 	outgoing chan *horus_pb.HorusMessage // outgoing messages
 	doneChan chan bool
 }
@@ -34,16 +33,16 @@ func NewSwitchRpcEndpoint(lAddress, rAddress string,
 }
 
 func (s *SwitchRpcEndpoint) createListener() {
-	lis, err := net.Listen("tcp4", s.lAddress)
-	if err != nil {
-		log.Println(err)
-	}
-	rpcServer := grpc.NewServer()
-	updater := NewUpdateServer(s.updates)
-	horus_pb.RegisterMdcSessionUpdaterServer(rpcServer, updater)
-	if err := rpcServer.Serve(lis); err != nil {
-		log.Println("Failed to start Hello Server", err)
-	}
+	// lis, err := net.Listen("tcp4", s.lAddress)
+	// if err != nil {
+	// 	log.Println(err)
+	// }
+	// rpcServer := grpc.NewServer()
+	// updater := NewUpdateServer(s.)
+	// horus_pb.RegisterMdcSessionUpdaterServer(rpcServer, updater)
+	// if err := rpcServer.Serve(lis); err != nil {
+	// 	log.Println("Failed to start Hello Server", err)
+	// }
 }
 
 func (s *SwitchRpcEndpoint) createConnPool() {
@@ -58,7 +57,6 @@ func (s *SwitchRpcEndpoint) createConnPool() {
 	var err error
 	s.connPool, err = grpcpool.New(factory, 10, 20, 5*time.Second)
 	if err != nil {
-		log.Println("YY")
 		log.Println(err)
 	}
 }
@@ -76,17 +74,17 @@ func (s *SwitchRpcEndpoint) sendSyncEvent(e *horus_pb.MdcSyncEvent) error {
 }
 
 func (s *SwitchRpcEndpoint) processEvents() {
-	for {
-		select {
-		case syncEv := <-s.syncEvents:
-			err := s.sendSyncEvent(syncEv)
-			if err != nil {
-				log.Println(err)
-			}
-		default:
-			continue
-		}
-	}
+	// for {
+	// 	select {
+	// 	case syncEv := <-s.syncEvents:
+	// 		err := s.sendSyncEvent(syncEv)
+	// 		if err != nil {
+	// 			log.Println(err)
+	// 		}
+	// 	default:
+	// 		continue
+	// 	}
+	// }
 }
 
 func (s *SwitchRpcEndpoint) Start() {

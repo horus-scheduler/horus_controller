@@ -21,7 +21,7 @@ type rootConfig struct {
 }
 
 type ctrlConfig struct {
-	ID      string
+	ID      uint16
 	Type    string
 	Address string
 }

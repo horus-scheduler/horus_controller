@@ -9,13 +9,20 @@ import (
 )
 
 type controller struct {
-	ID      string
+	ID      uint16
 	Address string
 	cfg     *rootConfig
 
+	// RPC server
 	rpcEndPoint *net.SwitchRpcEndpoint
-	healthMgr   *core.NodeHealthManager
-	localSock   *net.LocalSock
+
+	// This controller tracks the health of its downstream nodes
+	healthMgr *core.NodeHealthManager
+
+	// recv-from the ASIC
+	asicIngress chan []byte
+	// send-to the ASIC
+	asicEgress chan []byte
 }
 
 type leafController struct {
@@ -36,10 +43,8 @@ type switchCtrl struct {
 	// syncJobResults chan *core.SyncJobResult
 
 	// healthMgr  *core.NodeHealthManager
-	localSock  net.LocalSock
-	dpSendChan chan []byte
-	dpRecvChan chan []byte
-	bfrt       *bfrtC.Client
+	asicEndPoint *asicEndPoint
+	bfrt         *bfrtC.Client
 
 	leaves []*leafController
 	spines []*spineController
@@ -49,22 +54,27 @@ type switchCtrl struct {
 
 type SwitchCtrlOption func(*switchCtrl)
 
+func initLogger() {
+	logrus.SetLevel(logrus.DebugLevel)
+
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableLevelTruncation: true,
+		FullTimestamp:          false,
+		ForceColors:            true,
+	})
+}
+
 func NewController(opts ...SwitchCtrlOption) *switchCtrl {
 
+	initLogger()
 	// net.InitHorusDefinitions()
 
 	status := core.NewCtrlStatus()
 	cfg := ReadConfigFile("")
-	dpSendChan := make(chan []byte, net.DefaultUnixSockSendSize)
-	dpRecvChan := make(chan []byte, net.DefaultUnixSockRecvSize)
 	// activeNodeChan := make(chan *core.ActiveNodeMsg, net.DefaultUnixSockRecvSize)
 
 	// rpcIngressChan := make(chan *horus_pb.MdcSessionUpdateEvent, net.DefaultRpcRecvSize)
 	// rpcEgressChan := make(chan *horus_pb.MdcSyncEvent, net.DefaultRpcSendSize)
-
-	// ASIC <-> CPU interface.
-	var localSock net.LocalSock
-	localSock = net.NewRawSockClient(cfg.AsicIntf, dpSendChan, dpRecvChan)
 
 	var leaves []*leafController
 	var spines []*spineController
@@ -85,6 +95,8 @@ func NewController(opts ...SwitchCtrlOption) *switchCtrl {
 			)
 		}
 	}
+	// ASIC <-> CPU interface.
+	asicEndPoint := NewAsicEndPoint(cfg.AsicIntf, leaves, spines)
 	// rpcEndPoint := net.NewSwitchRpcEndpoint(cfg.LocalRpcAddress, cfg.RemoteRpcAddress, rpcIngressChan, rpcEgressChan)
 
 	// syncJobs := make(chan *core.SyncJob, 1000)
@@ -100,9 +112,7 @@ func NewController(opts ...SwitchCtrlOption) *switchCtrl {
 		status: status,
 
 		// // channels
-		dpRecvChan: dpRecvChan,
-		dpSendChan: dpSendChan,
-		localSock:  localSock,
+		asicEndPoint: asicEndPoint,
 
 		leaves: leaves,
 		spines: spines,
@@ -137,7 +147,7 @@ func (sc *switchCtrl) init(cfg *rootConfig) {
 
 func (sc *switchCtrl) Run() {
 	// // DP and RPC connections
-	// go sc.localSock.Start()
+	go sc.asicEndPoint.Start()
 	// go sc.rpcEndPoint.Start()
 
 	// // Components

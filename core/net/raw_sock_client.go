@@ -27,6 +27,7 @@ type RawSockClient struct {
 }
 
 func NewRawSockClient(ifName string, sendChan chan []byte, recvChan chan []byte) *RawSockClient {
+	logrus.Debugf("Creating RawSockClient listening at: %s", ifName)
 	return &RawSockClient{
 		ifName:       ifName,
 		sendChan:     sendChan,
@@ -84,10 +85,10 @@ func (rsc *RawSockClient) reconnect() {
 		rsc.connLock.RUnlock()
 
 		if checkConnection {
-			log.Println("Attempting to reconnect to data path: ", rsc.ifName)
+			logrus.Debugf("Attempting to reconnect to data path: %s", rsc.ifName)
 			err := rsc.Connect()
 			if err != nil {
-				log.Println("Error re-connecting to data path: ", err)
+				logrus.Errorln("Error re-connecting to data path: ", err)
 			}
 			time.Sleep(time.Second)
 		}

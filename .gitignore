@@ -1,10 +1,9 @@
-
+.vscode
 
 # generated protocol buffer code
 *.pb.go
 
 bin
-
 
 ### Go ###
 # Binaries for programs and plugins
