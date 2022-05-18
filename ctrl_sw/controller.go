@@ -9,150 +9,91 @@ import (
 )
 
 type controller struct {
+	Index   uint16
 	ID      uint16
 	Address string
 	cfg     *rootConfig
 
-	// RPC server
-	rpcEndPoint *net.SwitchRpcEndpoint
+	// Controller components
+	bfrt      *bfrtC.Client           // BfRt client
+	healthMgr *core.NodeHealthManager // Tracking the health of downstream nodes
 
-	// This controller tracks the health of its downstream nodes
-	healthMgr *core.NodeHealthManager
-
-	// recv-from the ASIC
-	asicIngress chan []byte
-	// send-to the ASIC
-	asicEgress chan []byte
+	// Communicating with the ASIC
+	asicIngress chan []byte // recv-from the ASIC
+	asicEgress  chan []byte // send-to the ASIC
 }
 
+// Leaf-specific logic
 type leafController struct {
 	*controller
+	evEncDec    *LeafEventEncDec     // Main leaf logic
+	rpcEndPoint *net.LeafRpcEndpoint // RPC server (Horus messages)
 }
 
+// Spine-specific logic
 type spineController struct {
 	*controller
+	evEncDec    *SpineEventEncDec     // Main spine logic
+	rpcEndPoint *net.SpineRpcEndpoint // RPC server (Horus messages)
 }
 
-type switchCtrl struct {
-	status *core.CtrlStatus
-	// sessionMgr *core.SessionManager
+// TODO: create (for leaf/spine):
+// 1. Health manager
+// 2. Event Encoder/Decoder
 
-	// rpcEndPoint    *net.SwitchRpcEndpoint
-	// sequencer      *sequencer.SimpleEventSequencer
-	// syncJobs       chan *core.SyncJob
-	// syncJobResults chan *core.SyncJobResult
-
-	// healthMgr  *core.NodeHealthManager
-	asicEndPoint *asicEndPoint
-	bfrt         *bfrtC.Client
-
-	leaves []*leafController
-	spines []*spineController
-
-	// evEncDec *EventEncDec
-}
-
-type SwitchCtrlOption func(*switchCtrl)
-
-func initLogger() {
-	logrus.SetLevel(logrus.DebugLevel)
-
-	logrus.SetFormatter(&logrus.TextFormatter{
-		DisableLevelTruncation: true,
-		FullTimestamp:          false,
-		ForceColors:            true,
-	})
-}
-
-func NewController(opts ...SwitchCtrlOption) *switchCtrl {
-
-	initLogger()
-	// net.InitHorusDefinitions()
-
-	status := core.NewCtrlStatus()
-	cfg := ReadConfigFile("")
-	// activeNodeChan := make(chan *core.ActiveNodeMsg, net.DefaultUnixSockRecvSize)
-
-	// rpcIngressChan := make(chan *horus_pb.MdcSessionUpdateEvent, net.DefaultRpcRecvSize)
-	// rpcEgressChan := make(chan *horus_pb.MdcSyncEvent, net.DefaultRpcSendSize)
-
-	var leaves []*leafController
-	var spines []*spineController
-	for _, ctrl := range cfg.Controllers {
-		if ctrl.Type == "leaf" {
-			leaves = append(leaves, &leafController{
-				&controller{
-					ID:      ctrl.ID,
-					Address: ctrl.Address,
-					cfg:     cfg}},
-			)
-		} else if ctrl.Type == "spine" {
-			spines = append(spines, &spineController{
-				&controller{
-					ID:      ctrl.ID,
-					Address: ctrl.Address,
-					cfg:     cfg}},
-			)
-		}
+func NewLeafController(index uint16, ctrl *ctrlConfig, cfg *rootConfig) *leafController {
+	asicEgress := make(chan []byte, net.DefaultUnixSockSendSize)
+	asicIngress := make(chan []byte, net.DefaultUnixSockRecvSize)
+	evEncDec := NewLeafEventEncDec(nil, nil, 0)
+	return &leafController{
+		rpcEndPoint: nil,
+		evEncDec:    evEncDec,
+		controller: &controller{
+			Index:       index,
+			ID:          ctrl.ID,
+			Address:     ctrl.Address,
+			cfg:         cfg,
+			asicIngress: asicIngress,
+			asicEgress:  asicEgress,
+			healthMgr:   nil,
+		},
 	}
-	// ASIC <-> CPU interface.
-	asicEndPoint := NewAsicEndPoint(cfg.AsicIntf, leaves, spines)
-	// rpcEndPoint := net.NewSwitchRpcEndpoint(cfg.LocalRpcAddress, cfg.RemoteRpcAddress, rpcIngressChan, rpcEgressChan)
-
-	// syncJobs := make(chan *core.SyncJob, 1000)
-	// syncJobResults := make(chan *core.SyncJobResult, 1000)
-	// healthMgr := core.NewNodeHealthManager(activeNodeChan, cfg.HealthyNodeTimeOut)
-	// eventSequencer := sequencer.NewSimpleEventSequencer(syncJobs, syncJobResults, healthMgr)
-
-	// encDecChan := NewEventEncDecChan(syncJobResults, syncJobs, activeNodeChan,
-	// 	rpcIngressChan, rpcEgressChan, dpRecvChan, dpSendChan)
-	// evEncDec := NewEventEncDec(encDecChan, healthMgr, eventSequencer, cfg.TorId)
-
-	s := &switchCtrl{
-		status: status,
-
-		// // channels
-		asicEndPoint: asicEndPoint,
-
-		leaves: leaves,
-		spines: spines,
-
-		// // components
-		// rpcEndPoint: rpcEndPoint,
-		// healthMgr:   healthMgr,
-		// sequencer:   eventSequencer,
-		// evEncDec:    evEncDec,
-	}
-
-	for _, opt := range opts {
-		opt(s)
-	}
-
-	s.init(cfg)
-
-	return s
 }
 
-func (sc *switchCtrl) init(cfg *rootConfig) {
-	// err := sc.localSock.Connect()
-	// if err != nil {
-	// 	log.Println("Error connecting to data path: ", err)
-	// }
-
-	// Init BfRt client (connection pool)
-	logrus.Infof("Connecting to BfRt gRPC server at %s", cfg.BfrtAddress)
-	device := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
-	sc.bfrt = bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, device)
+func NewSpineController(index uint16, ctrl *ctrlConfig, cfg *rootConfig) *spineController {
+	asicEgress := make(chan []byte, net.DefaultUnixSockSendSize)
+	asicIngress := make(chan []byte, net.DefaultUnixSockRecvSize)
+	return &spineController{
+		rpcEndPoint: nil,
+		controller: &controller{
+			Index:       index,
+			ID:          ctrl.ID,
+			Address:     ctrl.Address,
+			cfg:         cfg,
+			asicIngress: asicIngress,
+			asicEgress:  asicEgress,
+			healthMgr:   nil,
+		},
+	}
 }
 
-func (sc *switchCtrl) Run() {
-	// // DP and RPC connections
-	go sc.asicEndPoint.Start()
-	// go sc.rpcEndPoint.Start()
+// Common controller init. logic goes here
+func (c *controller) Start() {
+	logrus.
+		WithFields(logrus.Fields{"index": c.Index}).
+		Infof("Starting the switch controller")
+	target := bfrtC.NewTarget(bfrtC.WithDeviceId(c.cfg.DeviceID), bfrtC.WithPipeId(c.cfg.PipeID))
+	c.bfrt = bfrtC.NewClient(c.cfg.BfrtAddress, c.cfg.P4Name, uint32(c.Index), target)
+}
 
-	// // Components
-	// go sc.sequencer.Start()
-	// go sc.healthMgr.Start()
-	// go sc.evEncDec.Start()
-	select {}
+func (c *leafController) Start() {
+	c.controller.Start()
+	// go c.healthMgr.Start()
+	// go c.evEncDec.Start()
+}
+
+func (c *spineController) Start() {
+	c.controller.Start()
+	// go c.healthMgr.Start()
+	// go c.evEncDec.Start()
 }

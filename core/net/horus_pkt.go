@@ -63,6 +63,14 @@ var LayerTypeHorus = gopacket.RegisterLayerType(
 	},
 )
 
+func InitHorusDefinitions() {
+	layers.EthernetTypeMetadata[LayerTypeHorus] = layers.EnumMetadata{
+		DecodeWith: gopacket.DecodeFunc(decodeHorus),
+		Name:       "Horus",
+		LayerType:  LayerTypeHorus,
+	}
+}
+
 // When we inquire about the type, what type of layer should
 // we say it is? We want it to return our custom layer type
 func (horus *HorusPacket) LayerType() gopacket.LayerType {

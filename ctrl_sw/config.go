@@ -21,9 +21,10 @@ type rootConfig struct {
 }
 
 type ctrlConfig struct {
-	ID      uint16
-	Type    string
-	Address string
+	ID           uint16
+	Type         string
+	Address      string
+	WorkersCount uint16
 }
 
 func ReadConfigFile(configName string, configPaths ...string) *rootConfig {

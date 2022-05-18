@@ -30,13 +30,16 @@ address = "0.0.0.0:5501"
 id = 1 
 type = "leaf"
 address = "0.0.0.0:6601"
+workers_count = 8
 
 [[controllers]]
 id = 2
 type = "leaf"
 address = "0.0.0.0:6602"
+workers_count = 8
 
 [[controllers]]
 id = 3
 type = "leaf"
 address = "0.0.0.0:6603"
+workers_count = 8

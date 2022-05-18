@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/google/gopacket v1.1.19
-	github.com/khaledmdiab/bfrt-go-client v0.0.0-20220517043245-175bffedcfb2
+	github.com/khaledmdiab/bfrt-go-client v0.0.0-20220518191249-393f43aaba90
 	github.com/mdlayher/raw v0.1.0
 	github.com/processout/grpc-go-pool v1.2.1
 	github.com/sirupsen/logrus v1.8.1

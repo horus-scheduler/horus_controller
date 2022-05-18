@@ -29,10 +29,10 @@ type asicEndPoint struct {
 
 func NewAsicEndPoint(ifName string,
 	leaves []*leafController,
-	spines []*spineController) *asicEndPoint {
+	spines []*spineController,
+	asicIngress chan []byte,
+	asicEgress chan []byte) *asicEndPoint {
 
-	asicIngress := make(chan []byte, net.DefaultUnixSockSendSize)
-	asicEgress := make(chan []byte, net.DefaultUnixSockSendSize)
 	client := net.NewRawSockClient(ifName, asicEgress, asicIngress)
 
 	leafIngress := make(map[uint16]chan []byte)
@@ -41,16 +41,12 @@ func NewAsicEndPoint(ifName string,
 	spineEgress := make(map[uint16]chan []byte)
 
 	for _, l := range leaves {
-		sendChan := make(chan []byte, net.DefaultUnixSockSendSize)
-		recvChan := make(chan []byte, net.DefaultUnixSockRecvSize)
-		leafIngress[l.ID] = recvChan
-		leafEgress[l.ID] = sendChan
+		leafIngress[l.ID] = l.asicIngress
+		leafEgress[l.ID] = l.asicEgress
 	}
-	for _, l := range leaves {
-		sendChan := make(chan []byte, net.DefaultUnixSockSendSize)
-		recvChan := make(chan []byte, net.DefaultUnixSockRecvSize)
-		spineIngress[l.ID] = recvChan
-		spineEgress[l.ID] = sendChan
+	for _, s := range spines {
+		spineIngress[s.ID] = s.asicIngress
+		spineEgress[s.ID] = s.asicEgress
 	}
 
 	return &asicEndPoint{ifName: ifName,

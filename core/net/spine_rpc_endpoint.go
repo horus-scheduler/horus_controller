@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type SwitchRpcEndpoint struct {
+type SpineRpcEndpoint struct {
 	lAddress string
 	rAddress string
 
@@ -20,10 +20,10 @@ type SwitchRpcEndpoint struct {
 	doneChan chan bool
 }
 
-func NewSwitchRpcEndpoint(lAddress, rAddress string,
+func NewSpineRpcEndpoint(lAddress, rAddress string,
 	rpcIngressChan chan *horus_pb.HorusMessage,
-	rpcEgressChan chan *horus_pb.HorusMessage) *SwitchRpcEndpoint {
-	return &SwitchRpcEndpoint{
+	rpcEgressChan chan *horus_pb.HorusMessage) *SpineRpcEndpoint {
+	return &SpineRpcEndpoint{
 		lAddress: lAddress,
 		rAddress: rAddress,
 		incoming: rpcIngressChan,
@@ -32,7 +32,7 @@ func NewSwitchRpcEndpoint(lAddress, rAddress string,
 	}
 }
 
-func (s *SwitchRpcEndpoint) createListener() {
+func (s *SpineRpcEndpoint) createListener() {
 	// lis, err := net.Listen("tcp4", s.lAddress)
 	// if err != nil {
 	// 	log.Println(err)
@@ -45,7 +45,7 @@ func (s *SwitchRpcEndpoint) createListener() {
 	// }
 }
 
-func (s *SwitchRpcEndpoint) createConnPool() {
+func (s *SpineRpcEndpoint) createConnPool() {
 	var factory grpcpool.Factory
 	factory = func() (*grpc.ClientConn, error) {
 		conn, err := grpc.Dial(s.rAddress, grpc.WithInsecure())
@@ -61,7 +61,7 @@ func (s *SwitchRpcEndpoint) createConnPool() {
 	}
 }
 
-func (s *SwitchRpcEndpoint) sendSyncEvent(e *horus_pb.MdcSyncEvent) error {
+func (s *SpineRpcEndpoint) sendSyncEvent(e *horus_pb.MdcSyncEvent) error {
 	conn, err := s.connPool.Get(context.Background())
 	if err != nil {
 		log.Println(err)
@@ -73,7 +73,7 @@ func (s *SwitchRpcEndpoint) sendSyncEvent(e *horus_pb.MdcSyncEvent) error {
 	return err
 }
 
-func (s *SwitchRpcEndpoint) processEvents() {
+func (s *SpineRpcEndpoint) processEvents() {
 	// for {
 	// 	select {
 	// 	case syncEv := <-s.syncEvents:
@@ -87,7 +87,7 @@ func (s *SwitchRpcEndpoint) processEvents() {
 	// }
 }
 
-func (s *SwitchRpcEndpoint) Start() {
+func (s *SpineRpcEndpoint) Start() {
 	// create a pool of gRPC connections. used to send SyncEvent messages
 	s.createConnPool()
 

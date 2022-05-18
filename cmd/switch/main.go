@@ -5,6 +5,6 @@ import (
 )
 
 func main() {
-	cc := ctrl_sw.NewController()
+	cc := ctrl_sw.NewSwitchManager()
 	cc.Run()
 }
