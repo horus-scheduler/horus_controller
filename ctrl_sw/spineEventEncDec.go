@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// EventEncDecChan ...
+// SpineEventEncDecChan ...
 type SpineEventEncDecChan struct {
 	// healthManager channels
 	hmIngressActiveNode chan *core.ActiveNodeMsg // recv-from healthManager
@@ -39,21 +39,19 @@ func NewSpineEventEncDecChan(hmIngressActiveNode chan *core.ActiveNodeMsg,
 	}
 }
 
-// EventEncDec ...
+// SpineEventEncDec ...
 type SpineEventEncDec struct {
 	*SpineEventEncDecChan
 	healthMgr *core.NodeHealthManager
-	torId     uint32
 	doneChan  chan bool
 }
 
-// NewEventEncDec ...
+// NewSpineEventEncDec ...
 func NewSpineEventEncDec(encDecChan *SpineEventEncDecChan,
-	healthMgr *core.NodeHealthManager, torID uint32) *SpineEventEncDec {
+	healthMgr *core.NodeHealthManager) *SpineEventEncDec {
 	return &SpineEventEncDec{
 		SpineEventEncDecChan: encDecChan,
 		healthMgr:            healthMgr,
-		torId:                torID,
 		doneChan:             make(chan bool, 1),
 	}
 }

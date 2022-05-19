@@ -10,7 +10,7 @@ import (
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 )
 
-type mdcCentralCtrl struct {
+type centralController struct {
 	status *core.CtrlStatus
 
 	rpcEndPoint *net.CentralRpcEndpoint
@@ -21,9 +21,9 @@ type mdcCentralCtrl struct {
 	evEncDec       *EventEncDec
 }
 
-type CentralCtrlOption func(*mdcCentralCtrl)
+type CentralControllerOption func(*centralController)
 
-func NewController(opts ...CentralCtrlOption) *mdcCentralCtrl {
+func NewCentralController(opts ...CentralControllerOption) *centralController {
 	status := core.NewCtrlStatus()
 	cfg := ReadConfigFile("")
 
@@ -46,7 +46,7 @@ func NewController(opts ...CentralCtrlOption) *mdcCentralCtrl {
 	encDecChan := NewEventEncDecChan(syncJobResults, syncJobs, rpcAppIngress, rpcAppEgress, rpcTorIngress, rpcTorEgress)
 	evEncDec := NewEventEncDec(topology, labeler, encDecChan, sessionMgr, eventSequencer)
 
-	s := &mdcCentralCtrl{
+	s := &centralController{
 		status:      status,
 		rpcEndPoint: rpcEndPoint,
 
@@ -63,15 +63,12 @@ func NewController(opts ...CentralCtrlOption) *mdcCentralCtrl {
 	return s
 }
 
-func (cc *mdcCentralCtrl) Run() {
-
+func (cc *centralController) Run() {
 	// RPC connections
 	go cc.rpcEndPoint.Start()
-	//time.Sleep(1 * time.Second)
 
 	// Components
 	go cc.eventSequencer.Start()
-	//time.Sleep(1 * time.Second)
 	go cc.evEncDec.Start()
 	select {}
 }

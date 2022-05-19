@@ -22,6 +22,6 @@ func main() {
 	//log.Println(string(y))
 	//log.Println(y)
 
-	cc := ctrl_central.NewController()
+	cc := ctrl_central.NewCentralController()
 	cc.Run()
 }

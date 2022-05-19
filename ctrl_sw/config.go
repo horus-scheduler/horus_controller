@@ -1,9 +1,9 @@
 package ctrl_sw
 
 import (
-	"fmt"
 	"log"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
@@ -24,7 +24,7 @@ type ctrlConfig struct {
 	ID           uint16
 	Type         string
 	Address      string
-	WorkersCount uint16
+	ServersCount uint16 `mapstructure:"servers_count"`
 }
 
 func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
@@ -54,9 +54,11 @@ func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
 
 	err = viper.UnmarshalKey("controllers", &cfg.Controllers)
 	if err != nil {
-		fmt.Printf("unable to decode into struct, %v", err)
+		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
+
+	logrus.Info(cfg.Controllers)
 
 	return cfg
 }

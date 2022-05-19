@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// EventEncDecChan ...
+// LeafEventEncDecChan ...
 type LeafEventEncDecChan struct {
 	// healthManager channels
 	hmIngressActiveNode chan *core.ActiveNodeMsg // recv-from healthManager
@@ -39,21 +39,19 @@ func NewLeafEventEncDecChan(hmIngressActiveNode chan *core.ActiveNodeMsg,
 	}
 }
 
-// EventEncDec ...
+// LeafEventEncDec ...
 type LeafEventEncDec struct {
 	*LeafEventEncDecChan
 	healthMgr *core.NodeHealthManager
-	torId     uint32
 	doneChan  chan bool
 }
 
 // NewLeafEventEncDec ...
 func NewLeafEventEncDec(encDecChan *LeafEventEncDecChan,
-	healthMgr *core.NodeHealthManager, torID uint32) *LeafEventEncDec {
+	healthMgr *core.NodeHealthManager) *LeafEventEncDec {
 	return &LeafEventEncDec{
 		LeafEventEncDecChan: encDecChan,
 		healthMgr:           healthMgr,
-		torId:               torID,
 		doneChan:            make(chan bool, 1),
 	}
 }
@@ -61,14 +59,17 @@ func NewLeafEventEncDec(encDecChan *LeafEventEncDecChan,
 func (e *LeafEventEncDec) processIngress() {
 	for {
 		select {
+		// Message from the RPC endpoint
 		case message := <-e.rpcIngress:
 			go func() {
 				logrus.Debug(message)
 			}()
 
+		// Message from the health manager
 		case activeNodeMsg := <-e.hmIngressActiveNode:
 			logrus.Debugf("Send set-active-agent to switch %v", activeNodeMsg)
 
+		// Packet from the ASIC
 		case dpMsg := <-e.asicIngress:
 			go func() {
 				pkt := gopacket.NewPacket(dpMsg, layers.LayerTypeEthernet, gopacket.Default)

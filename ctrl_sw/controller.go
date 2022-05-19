@@ -15,8 +15,7 @@ type controller struct {
 	cfg     *rootConfig
 
 	// Controller components
-	bfrt      *bfrtC.Client           // BfRt client
-	healthMgr *core.NodeHealthManager // Tracking the health of downstream nodes
+	bfrt *bfrtC.Client // BfRt client
 
 	// Communicating with the ASIC
 	asicIngress chan []byte // recv-from the ASIC
@@ -26,15 +25,21 @@ type controller struct {
 // Leaf-specific logic
 type leafController struct {
 	*controller
-	evEncDec    *LeafEventEncDec     // Main leaf logic
-	rpcEndPoint *net.LeafRpcEndpoint // RPC server (Horus messages)
+
+	// Components
+	evEncDec    *LeafEventEncDec        // Main leaf logic
+	rpcEndPoint *net.LeafRpcEndpoint    // RPC server (Horus messages)
+	healthMgr   *core.NodeHealthManager // Tracking the health of downstream nodes
 }
 
 // Spine-specific logic
 type spineController struct {
 	*controller
-	evEncDec    *SpineEventEncDec     // Main spine logic
-	rpcEndPoint *net.SpineRpcEndpoint // RPC server (Horus messages)
+
+	// Components
+	evEncDec    *SpineEventEncDec       // Main spine logic
+	rpcEndPoint *net.SpineRpcEndpoint   // RPC server (Horus messages)
+	healthMgr   *core.NodeHealthManager // Tracking the health of downstream nodes
 }
 
 // TODO: create (for leaf/spine):
@@ -44,9 +49,10 @@ type spineController struct {
 func NewLeafController(index uint16, ctrl *ctrlConfig, cfg *rootConfig) *leafController {
 	asicEgress := make(chan []byte, net.DefaultUnixSockSendSize)
 	asicIngress := make(chan []byte, net.DefaultUnixSockRecvSize)
-	evEncDec := NewLeafEventEncDec(nil, nil, 0)
+	evEncDec := NewLeafEventEncDec(nil, nil)
 	return &leafController{
 		rpcEndPoint: nil,
+		healthMgr:   nil,
 		evEncDec:    evEncDec,
 		controller: &controller{
 			Index:       index,
@@ -55,7 +61,6 @@ func NewLeafController(index uint16, ctrl *ctrlConfig, cfg *rootConfig) *leafCon
 			cfg:         cfg,
 			asicIngress: asicIngress,
 			asicEgress:  asicEgress,
-			healthMgr:   nil,
 		},
 	}
 }
@@ -63,8 +68,11 @@ func NewLeafController(index uint16, ctrl *ctrlConfig, cfg *rootConfig) *leafCon
 func NewSpineController(index uint16, ctrl *ctrlConfig, cfg *rootConfig) *spineController {
 	asicEgress := make(chan []byte, net.DefaultUnixSockSendSize)
 	asicIngress := make(chan []byte, net.DefaultUnixSockRecvSize)
+	evEncDec := NewSpineEventEncDec(nil, nil)
 	return &spineController{
 		rpcEndPoint: nil,
+		healthMgr:   nil,
+		evEncDec:    evEncDec,
 		controller: &controller{
 			Index:       index,
 			ID:          ctrl.ID,
@@ -72,7 +80,6 @@ func NewSpineController(index uint16, ctrl *ctrlConfig, cfg *rootConfig) *spineC
 			cfg:         cfg,
 			asicIngress: asicIngress,
 			asicEgress:  asicEgress,
-			healthMgr:   nil,
 		},
 	}
 }
