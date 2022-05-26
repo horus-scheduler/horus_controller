@@ -16,15 +16,9 @@ type bfrtContext struct {
 
 type rootConfig struct {
 	bfrtContext
-	AsicIntf    string
-	Controllers []ctrlConfig
-}
-
-type ctrlConfig struct {
-	ID           uint16
-	Type         string
-	Address      string
-	ServersCount uint16 `mapstructure:"servers_count"`
+	AsicIntf string
+	SpineIDs []uint16
+	LeafIDs  []uint16
 }
 
 func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
@@ -52,13 +46,19 @@ func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
 	cfg.PipeID = viper.GetUint32("asic.pipe_id")
 	cfg.BfrtAddress = viper.GetString("bfrt.address")
 
-	err = viper.UnmarshalKey("controllers", &cfg.Controllers)
+	err = viper.UnmarshalKey("controllers.spines", &cfg.SpineIDs)
 	if err != nil {
 		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
+	logrus.Debug(cfg.SpineIDs)
 
-	logrus.Info(cfg.Controllers)
+	err = viper.UnmarshalKey("controllers.leaves", &cfg.LeafIDs)
+	if err != nil {
+		logrus.Errorf("unable to decode into struct, %v", err)
+		err = nil
+	}
+	logrus.Debug(cfg.LeafIDs)
 
 	return cfg
 }

@@ -1,0 +1,90 @@
+# Default topology
+#                                           Spine0
+#            +--------------------------------|--------------------------------+
+#            |                                |                                |
+#          Leaf0                            Leaf1                            Leaf2
+#    +-------|-------+                +-------|-------+                +-------|-------+
+#    |       |       |                |       |       |                |       |       |
+# Server0 Server1 Server2          Server3 Server4 Server5          Server6 Server7 Server8
+#    |       |       |                |       |       |                |       |       |
+# W00-W07 W08-W15 W16-W23          W00-W07 W08-W15 W16-W23          W00-W07 W08-W15 W16-W23
+
+# Important Notes:
+# The IDs of Spines, Leaves, and Servers are *global*, starting from 0
+# The IDs of workers per Leaf are local to that Leaf
+
+[topology]
+
+    [[topology.spines]]
+        id = 0
+        address = "0.0.0.0:5501"
+        leaves = [0, 1, 2]
+
+    [[topology.leaves]]
+        id = 0 
+        address = "0.0.0.0:6601"
+        servers = [0, 1, 2] # order matters
+
+    [[topology.leaves]]
+        id = 1
+        address = "0.0.0.0:6602"
+        servers = [3, 4, 5] # order matters
+
+    [[topology.leaves]]
+        id = 2
+        address = "0.0.0.0:6603"
+        servers = [6, 7, 8] # order matters
+
+    [[topology.servers]]
+        id = 0
+        port_id = 1
+        address = ""
+        workers_count = 8
+
+    [[topology.servers]]
+        id = 1
+        port_id = 1
+        address = ""
+        workers_count = 8
+
+    [[topology.servers]]
+        id = 2
+        port_id = 1
+        address = ""
+        workers_count = 8
+
+    [[topology.servers]]
+        id = 3
+        port_id = 1
+        address = ""
+        workers_count = 8
+
+    [[topology.servers]]
+        id = 4
+        port_id = 1
+        address = ""
+        workers_count = 8
+
+    [[topology.servers]]
+        id = 5
+        port_id = 1
+        address = ""
+        workers_count = 8
+
+    [[topology.servers]]
+        id = 6
+        port_id = 1
+        address = ""
+        workers_count = 8
+
+    [[topology.servers]]
+        id = 7
+        port_id = 1
+        address = ""
+        workers_count = 8
+
+    [[topology.servers]]
+        id = 8
+        port_id = 1
+        address = "X"
+        workers_count = 8

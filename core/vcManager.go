@@ -6,52 +6,58 @@ import (
 	"github.com/khaledmdiab/horus_controller/core/model"
 )
 
-type sessionMap struct {
+type vcMap struct {
 	sync.RWMutex
-	internal map[string]*model.Session
+	internal map[uint16]*model.VirtualCluster
 }
 
-func newSessionMap() *sessionMap {
-	return &sessionMap{
-		internal: make(map[string]*model.Session),
+func newVCMap() *vcMap {
+	return &vcMap{
+		internal: make(map[uint16]*model.VirtualCluster),
 	}
 }
 
-func (rm *sessionMap) Load(key string) (value *model.Session, ok bool) {
+func (rm *vcMap) Load(key uint16) (value *model.VirtualCluster, ok bool) {
 	rm.RLock()
 	result, ok := rm.internal[key]
 	rm.RUnlock()
 	return result, ok
 }
 
-func (rm *sessionMap) Delete(key string) {
+func (rm *vcMap) Delete(key uint16) {
 	rm.Lock()
 	delete(rm.internal, key)
 	rm.Unlock()
 }
 
-func (rm *sessionMap) Store(key string, value *model.Session) {
+func (rm *vcMap) Store(key uint16, value *model.VirtualCluster) {
 	rm.Lock()
 	rm.internal[key] = value
 	rm.Unlock()
 }
 
-type SessionManager struct {
-	sessions *sessionMap
-	// algorithm mc_algorithm.MulticastAlgorithm
+type VCManager struct {
+	vcs      *vcMap
+	topology *model.SimpleTopology
 }
 
-/*
-
-func NewSessionManager(algorithm mc_algorithm.MulticastAlgorithm) *SessionManager {
-	return &SessionManager{
-		sessions:  newSessionMap(),
-		algorithm: algorithm,
-		//doneChan: make(chan bool),
+func NewVCManager(topology *model.SimpleTopology) *VCManager {
+	return &VCManager{
+		vcs:      newVCMap(),
+		topology: topology,
 	}
 }
 
+func (vcm *VCManager) AddVC(vc *model.VirtualCluster) {
+	vcm.vcs.Store(vc.ClusterID, vc)
+}
 
+// TODO: get which VCs are impacted by a server failure
+// Keep track of:
+// map[serverID] --> list of VCs
+// map[leafID] --> list of VCs
+
+/*
 func (sm *SessionManager) ActivateSession(sessionAddress string) *model.MulticastTree {
 	if s, found := sm.sessions.Load(sessionAddress); found {
 		s.Activate()
@@ -68,10 +74,6 @@ func (sm *SessionManager) DeactivateSession(sessionAddress string) *model.Multic
 	return nil
 }
 
-func (sm *SessionManager) CreateSession(session *model.Session) *model.MulticastTree {
-	sm.sessions.Store(session.SessionAddressString, session)
-	return sm.algorithm.OnSessionCreated(session)
-}
 
 func (sm *SessionManager) AddReceiver(sessionAddress string, receiver *model.Node) *model.MulticastTree {
 	if s, found := sm.sessions.Load(sessionAddress); found {

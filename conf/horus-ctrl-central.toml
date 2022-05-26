@@ -7,9 +7,3 @@ title = "Horus centralizer controller"
       # communicating with switches via gRPC
       rpcAddress = "0.0.0.0:4401"
 
-[spines]
-# the current convention is:
-# XXX
-addresses = [
-  "0.0.0.0:5501",
-]

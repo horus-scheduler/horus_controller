@@ -12,7 +12,7 @@ import (
 // LeafEventEncDecChan ...
 type LeafEventEncDecChan struct {
 	// healthManager channels
-	hmIngressActiveNode chan *core.ActiveNodeMsg // recv-from healthManager
+	hmIngressActiveNode chan *core.HealthManagerMsg // recv-from healthManager
 	// send-to healthManager
 
 	// gRPC channels
@@ -25,7 +25,7 @@ type LeafEventEncDecChan struct {
 }
 
 // NewLeafEventEncDecChan ...
-func NewLeafEventEncDecChan(hmIngressActiveNode chan *core.ActiveNodeMsg,
+func NewLeafEventEncDecChan(hmIngressActiveNode chan *core.HealthManagerMsg,
 	rpcIngress chan *horus_pb.HorusMessage,
 	rpcEgress chan *horus_pb.HorusMessage,
 	asicIngress chan []byte,
@@ -60,10 +60,10 @@ func (e *LeafEventEncDec) processIngress() {
 	for {
 		select {
 		// Message from the RPC endpoint
-		case message := <-e.rpcIngress:
-			go func() {
-				logrus.Debug(message)
-			}()
+		// case message := <-e.rpcIngress:
+		// 	go func() {
+		// 		logrus.Debug(message)
+		// 	}()
 
 		// Message from the health manager
 		case activeNodeMsg := <-e.hmIngressActiveNode:

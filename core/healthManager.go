@@ -13,12 +13,12 @@ type NodeHealthManager struct {
 	nodes              *model.TrackableNodeMap
 	activeNode         *model.TrackableNode
 	activeNodeLock     sync.RWMutex // used when changing the activeNode member
-	activeNodeChan     chan *ActiveNodeMsg
+	activeNodeChan     chan *HealthManagerMsg
 	healthyNodeTimeOut time.Duration
 	doneChan           chan bool
 }
 
-func NewNodeHealthManager(activeNodeChan chan *ActiveNodeMsg, healthyNodeTimeOut int64) *NodeHealthManager {
+func NewNodeHealthManager(activeNodeChan chan *HealthManagerMsg, healthyNodeTimeOut int64) *NodeHealthManager {
 	return &NodeHealthManager{
 		activeNodeChan:     activeNodeChan,
 		healthyNodeTimeOut: time.Duration(healthyNodeTimeOut) * time.Millisecond,
@@ -27,7 +27,7 @@ func NewNodeHealthManager(activeNodeChan chan *ActiveNodeMsg, healthyNodeTimeOut
 	}
 }
 
-func (hm *NodeHealthManager) getNodeAddress(address string, nodeId uint32) string {
+func (hm *NodeHealthManager) getNodeAddress(address string, nodeId uint16) string {
 	addr := address
 	if addr == "" {
 		addr = strconv.Itoa(int(nodeId))
@@ -84,12 +84,13 @@ func (hm *NodeHealthManager) GetActiveNodesAddresses() []string {
 	return addresses
 }
 
-func (hm *NodeHealthManager) OnNodePingRecv(address string, nodeId, portId uint32) {
+func (hm *NodeHealthManager) OnNodePingRecv(address string, nodeId, portId uint16) {
 	nodeAddr := hm.getNodeAddress(address, nodeId)
 	// Get Node from the Node map
 	node, found := hm.nodes.Load(nodeAddr)
 	if !found {
-		node = model.NewTrackableNode(nodeAddr, nodeId, portId)
+		n := model.NewNode(nodeAddr, nodeId, portId, model.NodeType_Leaf)
+		node = model.NewTrackableNode(n)
 		hm.nodes.Store(nodeAddr, node)
 	}
 
@@ -105,7 +106,7 @@ func (hm *NodeHealthManager) OnNodePingRecv(address string, nodeId, portId uint3
 	if hm.canBeActiveNode(node) {
 		log.Println(">>> Set Active Node on Ping ", nodeId)
 		hm.setActiveNode(node)
-		hm.activeNodeChan <- NewActiveNodeMsg(node.Id)
+		hm.activeNodeChan <- NewActiveNodeMsg(false, nil)
 	}
 
 	// If first ping or the Node isn't ready: sync-state
@@ -141,7 +142,7 @@ func (hm *NodeHealthManager) ProcessNodes() {
 				if hm.canBeActiveNode(node) {
 					log.Println(">>> Reset Active Node")
 					hm.setActiveNode(node)
-					hm.activeNodeChan <- NewActiveNodeMsg(node.Id)
+					hm.activeNodeChan <- NewActiveNodeMsg(false, nil)
 				}
 			}
 		}

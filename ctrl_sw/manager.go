@@ -49,15 +49,15 @@ func NewSwitchManager(opts ...SwitchManagerOption) *switchManager {
 	// Initialize leaf and spine controllers
 	var leaves []*leafController
 	var spines []*spineController
-	for ctrlIdx, ctrl := range cfg.Controllers {
-		if ctrl.Type == "leaf" {
-			newCtrl := NewLeafController(uint16(ctrlIdx+1), &ctrl, cfg)
-			leaves = append(leaves, newCtrl)
-		} else if ctrl.Type == "spine" {
-			newCtrl := NewSpineController(uint16(ctrlIdx+1), &ctrl, cfg)
-			spines = append(spines, newCtrl)
-		}
-	}
+	// for ctrlIdx, ctrl := range cfg.LeafIDs {
+	// 	if ctrl.Type == "leaf" {
+	// 		newCtrl := NewLeafController(uint16(ctrlIdx+1), &ctrl, cfg)
+	// 		leaves = append(leaves, newCtrl)
+	// 	} else if ctrl.Type == "spine" {
+	// 		newCtrl := NewSpineController(uint16(ctrlIdx+1), &ctrl, cfg)
+	// 		spines = append(spines, newCtrl)
+	// 	}
+	// }
 
 	// ASIC <-> CPU interface.
 	asicIngress := make(chan []byte, net.DefaultUnixSockSendSize)

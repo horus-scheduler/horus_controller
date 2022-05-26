@@ -12,7 +12,7 @@ import (
 // SpineEventEncDecChan ...
 type SpineEventEncDecChan struct {
 	// healthManager channels
-	hmIngressActiveNode chan *core.ActiveNodeMsg // recv-from healthManager
+	hmIngressActiveNode chan *core.HealthManagerMsg // recv-from healthManager
 	// send-to healthManager
 
 	// gRPC channels
@@ -25,7 +25,7 @@ type SpineEventEncDecChan struct {
 }
 
 // NewSpineEventEncDecChan ...
-func NewSpineEventEncDecChan(hmIngressActiveNode chan *core.ActiveNodeMsg,
+func NewSpineEventEncDecChan(hmIngressActiveNode chan *core.HealthManagerMsg,
 	rpcIngress chan *horus_pb.HorusMessage,
 	rpcEgress chan *horus_pb.HorusMessage,
 	asicIngress chan []byte,

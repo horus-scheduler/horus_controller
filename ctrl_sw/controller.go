@@ -3,6 +3,7 @@ package ctrl_sw
 import (
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/net"
+	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
@@ -46,18 +47,31 @@ type spineController struct {
 // 1. Health manager
 // 2. Event Encoder/Decoder
 
-func NewLeafController(index uint16, ctrl *ctrlConfig, cfg *rootConfig) *leafController {
+func NewLeafController(index uint16, cfg *rootConfig) *leafController {
 	asicEgress := make(chan []byte, net.DefaultUnixSockSendSize)
 	asicIngress := make(chan []byte, net.DefaultUnixSockRecvSize)
-	evEncDec := NewLeafEventEncDec(nil, nil)
+	activeNode := make(chan *core.HealthManagerMsg, net.DefaultUnixSockRecvSize)
+	rpcIngress := make(chan *horus_pb.HorusMessage, net.DefaultRpcRecvSize)
+	rpcEgress := make(chan *horus_pb.HorusMessage, net.DefaultRpcSendSize)
+
+	// TODO: Leaf Health manager
+	healthMgr := core.NewNodeHealthManager(activeNode, 1000)
+	// TODO: Leaf RPC end point
+	// rpcEndPoint := net.NewLeafRpcEndpoint(cfg.LocalRpcAddress, cfg.RemoteRpcAddress, rpcIngressChan, rpcEgressChan)
+	// TODO: object model
+
+	ch := NewLeafEventEncDecChan(activeNode, rpcIngress, rpcEgress,
+		asicIngress, asicEgress)
+
+	evEncDec := NewLeafEventEncDec(ch, healthMgr)
 	return &leafController{
 		rpcEndPoint: nil,
-		healthMgr:   nil,
+		healthMgr:   healthMgr,
 		evEncDec:    evEncDec,
 		controller: &controller{
-			Index:       index,
-			ID:          ctrl.ID,
-			Address:     ctrl.Address,
+			Index: index,
+			// ID:          ctrl.ID,
+			// Address:     ctrl.Address,
 			cfg:         cfg,
 			asicIngress: asicIngress,
 			asicEgress:  asicEgress,
@@ -65,18 +79,31 @@ func NewLeafController(index uint16, ctrl *ctrlConfig, cfg *rootConfig) *leafCon
 	}
 }
 
-func NewSpineController(index uint16, ctrl *ctrlConfig, cfg *rootConfig) *spineController {
+func NewSpineController(index uint16, cfg *rootConfig) *spineController {
 	asicEgress := make(chan []byte, net.DefaultUnixSockSendSize)
 	asicIngress := make(chan []byte, net.DefaultUnixSockRecvSize)
-	evEncDec := NewSpineEventEncDec(nil, nil)
+	activeNode := make(chan *core.HealthManagerMsg, net.DefaultUnixSockRecvSize)
+	rpcIngress := make(chan *horus_pb.HorusMessage, net.DefaultRpcRecvSize)
+	rpcEgress := make(chan *horus_pb.HorusMessage, net.DefaultRpcSendSize)
+
+	// TODO: Spine Health manager
+	healthMgr := core.NewNodeHealthManager(activeNode, 1000)
+	// TODO: Spine RPC end point
+	// rpcEndPoint := net.NewSpineRpcEndpoint(cfg.LocalRpcAddress, cfg.RemoteRpcAddress, rpcIngressChan, rpcEgressChan)
+	// TODO: object model
+
+	ch := NewSpineEventEncDecChan(activeNode, rpcIngress, rpcEgress,
+		asicIngress, asicEgress)
+
+	evEncDec := NewSpineEventEncDec(ch, healthMgr)
 	return &spineController{
 		rpcEndPoint: nil,
 		healthMgr:   nil,
 		evEncDec:    evEncDec,
 		controller: &controller{
-			Index:       index,
-			ID:          ctrl.ID,
-			Address:     ctrl.Address,
+			Index: index,
+			// ID:          ctrl.ID,
+			// Address:     ctrl.Address,
 			cfg:         cfg,
 			asicIngress: asicIngress,
 			asicEgress:  asicEgress,
@@ -95,8 +122,8 @@ func (c *controller) Start() {
 
 func (c *leafController) Start() {
 	c.controller.Start()
-	// go c.healthMgr.Start()
-	// go c.evEncDec.Start()
+	go c.healthMgr.Start()
+	go c.evEncDec.Start()
 }
 
 func (c *spineController) Start() {

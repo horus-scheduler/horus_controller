@@ -1,0 +1,19 @@
+[[vc]]
+    id = 0
+    spines = [0]
+        [[vc.server]]
+            id = 0
+            workers = [0, 2, 3]
+        [[vc.server]]
+            id = 4
+            workers = [8, 9, 10]
+
+[[vc]]
+    id = 1
+    spines = [0]
+        [[vc.server]]
+            id = 1
+            workers = [8, 11]
+        [[vc.server]]
+            id = 2
+            workers = [23, 23]

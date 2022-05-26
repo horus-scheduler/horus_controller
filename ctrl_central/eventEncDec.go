@@ -1,3 +1,6 @@
+//go:build exclude
+// +build exclude
+
 package ctrl_central
 
 import (
@@ -6,7 +9,6 @@ import (
 	"math"
 
 	"github.com/khaledmdiab/horus_controller/core"
-	"github.com/khaledmdiab/horus_controller/core/label"
 	"github.com/khaledmdiab/horus_controller/core/model"
 	"github.com/khaledmdiab/horus_controller/core/sequencer"
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"

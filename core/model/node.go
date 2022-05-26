@@ -5,13 +5,26 @@ import (
 	"time"
 )
 
+type NodeType int
+
+const (
+	NodeType_Server NodeType = iota
+	NodeType_Leaf
+	NodeType_Spine
+	NodeType_Core
+)
+
 type Node struct {
 	sync.RWMutex
 	Address  string
-	Id       uint32
-	PortId   uint32
-	Parents  []*Node
+	ID       uint16
+	PortId   uint16 // valid if Type == server
+	Type     NodeType
+	Parent   *Node
 	Children []*Node
+
+	FirstWorkerID uint16 // valid if Type == leaf | server
+	LastWorkerID  uint16 // valid if Type == leaf | server
 }
 
 type TrackableNode struct {
@@ -21,17 +34,18 @@ type TrackableNode struct {
 	Ready        bool
 }
 
-func NewNode(address string, id, portId uint32) *Node {
+func NewNode(address string, id, portId uint16, nodeType NodeType) *Node {
 	return &Node{Address: address,
-		Id:       id,
+		ID:       id,
 		PortId:   portId,
-		Parents:  make([]*Node, 0),
+		Type:     nodeType,
+		Parent:   nil,
 		Children: make([]*Node, 0),
 	}
 }
 
-func NewTrackableNode(address string, id, portId uint32) *TrackableNode {
-	return &TrackableNode{Node: NewNode(address, id, portId),
+func NewTrackableNode(node *Node) *TrackableNode {
+	return &TrackableNode{Node: node,
 		LastPingTime: time.Now(),
 		Healthy:      true,
 		Ready:        false,
@@ -40,29 +54,29 @@ func NewTrackableNode(address string, id, portId uint32) *TrackableNode {
 
 type NodeMap struct {
 	sync.RWMutex
-	internal map[string]*Node
+	internal map[uint16]*Node
 }
 
 func NewNodeMap() *NodeMap {
 	return &NodeMap{
-		internal: make(map[string]*Node),
+		internal: make(map[uint16]*Node),
 	}
 }
 
-func (rm *NodeMap) Load(key string) (value *Node, ok bool) {
+func (rm *NodeMap) Load(key uint16) (value *Node, ok bool) {
 	rm.RLock()
 	result, ok := rm.internal[key]
 	rm.RUnlock()
 	return result, ok
 }
 
-func (rm *NodeMap) Delete(key string) {
+func (rm *NodeMap) Delete(key uint16) {
 	rm.Lock()
 	delete(rm.internal, key)
 	rm.Unlock()
 }
 
-func (rm *NodeMap) Store(key string, value *Node) {
+func (rm *NodeMap) Store(key uint16, value *Node) {
 	rm.Lock()
 	rm.internal[key] = value
 	rm.Unlock()
