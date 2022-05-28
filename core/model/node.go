@@ -63,6 +63,12 @@ func NewNodeMap() *NodeMap {
 	}
 }
 
+func (rm *NodeMap) Internal() map[uint16]*Node {
+	rm.RLock()
+	defer rm.RUnlock()
+	return rm.internal
+}
+
 func (rm *NodeMap) Load(key uint16) (value *Node, ok bool) {
 	rm.RLock()
 	result, ok := rm.internal[key]

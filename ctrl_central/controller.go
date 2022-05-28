@@ -34,27 +34,19 @@ func NewCentralController(opts ...CentralControllerOption) *centralController {
 	initLogger()
 
 	status := core.NewCtrlStatus()
-	binCfg := model.ReadConfigFile("")
+	// binCfg := model.ReadConfigFile("")
 	topoCfg := model.ReadTopologyFile("")
 	vcsConf := model.ReadVCsFile("")
-	logrus.Info(binCfg)
-	logrus.Info(topoCfg)
-	logrus.Info(vcsConf)
+	// logrus.Info(binCfg)
+	// logrus.Info(topoCfg)
+	// logrus.Info(vcsConf)
 
 	topology := model.NewSimpleTopology(topoCfg)
-	topology.Debug()
+	vcm := core.NewVCManager(topology)
 	for _, vcConf := range vcsConf.VCs {
 		vc := model.NewVC(vcConf, topology)
-		vc.Debug()
-
-		if vc.ClusterID == 0 {
-			vc.RemoveServer(4)
-			vc.Debug()
-		}
+		vcm.AddVC(vc)
 	}
-
-	// algorithm := mc_algorithm.NewSimpleMCAlgorithm(topology)
-	// labeler := label.NewLabelCalculator(topology)
 
 	// syncJobs := make(chan *core.SyncJob, 1000)             // esEgress
 	// syncJobResults := make(chan *core.SyncJobResult, 1000) // esIngress

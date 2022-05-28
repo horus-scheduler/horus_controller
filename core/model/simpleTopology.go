@@ -19,29 +19,29 @@ const (
 type SimpleTopology struct {
 	sync.RWMutex
 	Root    *Node
-	Servers []*Node
-	Leaves  []*Node
-	Spines  []*Node
-	Cores   []*Node
+	Servers *NodeMap
+	Leaves  *NodeMap
+	Spines  *NodeMap
+	Cores   *NodeMap
 }
 
 func NewSimpleTopology(topoCfg *topoRootConfig) *SimpleTopology {
 	s := &SimpleTopology{
-		Servers: make([]*Node, 0),
-		Leaves:  make([]*Node, 0),
-		Spines:  make([]*Node, 0),
-		Cores:   make([]*Node, 0),
+		Servers: NewNodeMap(),
+		Leaves:  NewNodeMap(),
+		Spines:  NewNodeMap(),
+		Cores:   NewNodeMap(),
 	}
 
 	s.Root = NewNode("", 0, 0, NodeType_Core)
 	s.Root.Parent = nil
-	s.Cores = append(s.Cores, s.Root)
+	s.Cores.Store(s.Root.ID, s.Root)
 
 	for _, spineConf := range topoCfg.Spines {
 		spine := NewNode(spineConf.Address, spineConf.ID, 0, NodeType_Spine)
 		spine.Parent = s.Root
 		s.Root.Children = append(s.Root.Children, spine)
-		s.Spines = append(s.Spines, spine)
+		s.Spines.Store(spine.ID, spine)
 
 		for _, leafID := range spineConf.LeafIDs {
 			// workerIDs are local per leaf
@@ -62,10 +62,10 @@ func NewSimpleTopology(topoCfg *topoRootConfig) *SimpleTopology {
 				workerID += serverConf.WorkersCount
 				server.LastWorkerID = workerID - 1
 
-				s.Servers = append(s.Servers, server)
+				s.Servers.Store(server.ID, server)
 			}
 			leaf.LastWorkerID = workerID - 1
-			s.Leaves = append(s.Leaves, leaf)
+			s.Leaves.Store(leaf.ID, leaf)
 		}
 	}
 
@@ -73,7 +73,7 @@ func NewSimpleTopology(topoCfg *topoRootConfig) *SimpleTopology {
 }
 
 func (s *SimpleTopology) GetNode(nodeId uint16, nodeType NodeType) *Node {
-	var nodes []*Node
+	var nodes *NodeMap
 	if nodeType == NodeType_Server {
 		nodes = s.Servers
 	} else if nodeType == NodeType_Leaf {
@@ -81,16 +81,17 @@ func (s *SimpleTopology) GetNode(nodeId uint16, nodeType NodeType) *Node {
 	} else if nodeType == NodeType_Spine {
 		nodes = s.Spines
 	}
-	if nodeId >= uint16(len(nodes)) {
-		return nil
-	}
 
-	return nodes[nodeId]
+	node, found := nodes.Load(nodeId)
+	if found {
+		return node
+	}
+	return nil
 }
 
 // Assumes that addresses are unique per Servers, Leaves, and Spines
 func (s *SimpleTopology) GetNodeByAddress(nodeAddress string, nodeType NodeType) *Node {
-	var nodes []*Node
+	var nodes *NodeMap
 	if nodeType == NodeType_Server {
 		nodes = s.Servers
 	} else if nodeType == NodeType_Leaf {
@@ -98,7 +99,7 @@ func (s *SimpleTopology) GetNodeByAddress(nodeAddress string, nodeType NodeType)
 	} else if nodeType == NodeType_Spine {
 		nodes = s.Spines
 	}
-	for _, n := range nodes {
+	for _, n := range nodes.Internal() {
 		if n.Address == nodeAddress {
 			return n
 		}
@@ -106,46 +107,84 @@ func (s *SimpleTopology) GetNodeByAddress(nodeAddress string, nodeType NodeType)
 	return nil
 }
 
-// Return the local index of the removed server within the leaf
-// Global serverID
-func (s *SimpleTopology) RemoveServer(serverID uint16) int {
+// Input: Global serverID
+// Output: a list of updated servers
+func (s *SimpleTopology) RemoveServer(serverID uint16) []*Node {
 	server := s.GetNode(serverID, NodeType_Server)
+	var updatedServers []*Node
 	if server == nil {
-		return -1
+		return updatedServers
 	}
 	s.Lock()
 	defer s.Unlock()
 
 	leaf := server.Parent
 	var workerID uint16 = 0
-	var removedIdx int = 0
-	for sIdx, s := range leaf.Children {
-		if s.ID != serverID {
-			workersCount := s.LastWorkerID - s.FirstWorkerID + 1
-			s.FirstWorkerID = workerID
+	var removedIdx int = -1
+	for sIdx, srv := range leaf.Children {
+		if srv.ID != serverID {
+			workersCount := srv.LastWorkerID - srv.FirstWorkerID + 1
+			srv.FirstWorkerID = workerID
 			workerID += workersCount
-			s.LastWorkerID = workerID - 1
+			srv.LastWorkerID = workerID - 1
+			if removedIdx > -1 {
+				updatedServers = append(updatedServers, srv)
+			}
 		} else {
 			removedIdx = sIdx
 		}
 	}
 	leaf.FirstWorkerID = 0
-	leaf.LastWorkerID = workerID - 1
-	leaf.Children = append(leaf.Children[:removedIdx], leaf.Children[removedIdx+1:]...)
-	s.Servers = append(s.Servers[:serverID], s.Servers[serverID+1:]...)
-
-	// Modify global server IDs
-	for i := int(serverID); i < len(s.Servers); i++ {
-		s.Servers[i].ID -= 1
+	if workerID == 0 {
+		leaf.LastWorkerID = 0
+	} else {
+		leaf.LastWorkerID = workerID - 1
 	}
+
+	leaf.Children = append(leaf.Children[:removedIdx], leaf.Children[removedIdx+1:]...)
+
+	s.Servers.Delete(serverID)
+
+	return updatedServers
+}
+
+// Return the local index of the removed leaf within the spine
+// Input: Global leafID
+func (s *SimpleTopology) RemoveLeaf(leafID uint16) int {
+	leaf := s.GetNode(leafID, NodeType_Leaf)
+
+	if leaf == nil {
+		return -1
+	}
+	logrus.Debug("Removing leaf: ", leaf.ID)
+	// Remove children *before* the lock
+	for {
+		if len(leaf.Children) == 0 {
+			break
+		}
+		s.RemoveServer(leaf.Children[0].ID)
+	}
+	s.Lock()
+	defer s.Unlock()
+
+	spine := leaf.Parent
+	var removedIdx int = 0
+	for lIdx, l := range spine.Children {
+		if l.ID == leafID {
+			removedIdx = lIdx
+			break
+		}
+	}
+	spine.Children = append(spine.Children[:removedIdx], spine.Children[removedIdx+1:]...)
+	s.Leaves.Delete(leafID)
 
 	return removedIdx
 }
 
 func (s *SimpleTopology) Debug() {
-	logrus.Debug("Spines Count=", len(s.Spines))
-	logrus.Debug("Leaves Count=", len(s.Leaves))
-	logrus.Debug("Servers Count=", len(s.Servers))
+	logrus.Debug("Spines Count=", len(s.Spines.Internal()))
+	logrus.Debug("Leaves Count=", len(s.Leaves.Internal()))
+	logrus.Debug("Servers Count=", len(s.Servers.Internal()))
 
 	// DFS
 	stack := make([]*Node, 0)

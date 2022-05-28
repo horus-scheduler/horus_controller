@@ -19,7 +19,7 @@ type VirtualCluster struct {
 func NewVC(vcConfig *vcConfig, topology *SimpleTopology) *VirtualCluster {
 	s := &VirtualCluster{ClusterID: vcConfig.ID,
 		Active: true,
-		Client: nil,
+		Client: nil, // TODO
 	}
 	s.Servers = NewNodeMap()
 	s.Leaves = NewNodeMap()
@@ -57,13 +57,20 @@ func (vc *VirtualCluster) Deactivate() {
 
 // Maybe?
 // AddServer, AddLeaf, AddSpine
-// RemoveLeaf, RemoveSpine
+// RemoveSpine
 
-// Remove a server from the VC, and automatically remove a leaf if it has no other children in this VC
-// This method does not change the underlying topology (First and Last workerID)
-// To modify the topology, one should call SimpleTopology.RemoveServer(serverID)
-func (vc *VirtualCluster) RemoveServer(serverID uint16) bool {
-	// TODO: Should we remove Spines?
+// Detach a server from the VC, and automatically detach a leaf
+// if it has no other children in this VC.
+// This method does not change the underlying topology
+// (e.g., First and Last workerID)
+// To modify the topology, one should call:
+// SimpleTopology.RemoveServer(serverID)
+// Returns:
+// bool: the server is detached
+// bool: a leaf is detached
+func (vc *VirtualCluster) DetachServer(serverID uint16) (bool, bool) {
+	// TODO: Should we detach Spines?
+	leafDetached := false
 	if server, ok := vc.Servers.Load(serverID); ok {
 		leaf := server.Parent
 		leafHasOtherChild := false
@@ -71,16 +78,41 @@ func (vc *VirtualCluster) RemoveServer(serverID uint16) bool {
 			if s.ID != serverID {
 				if _, ok1 := vc.Servers.Load(s.ID); ok1 {
 					leafHasOtherChild = true
+					break
 				}
 			}
 		}
 		if !leafHasOtherChild {
 			vc.Leaves.Delete(leaf.ID)
+			leafDetached = true
 		}
 		vc.Servers.Delete(serverID)
-		return true
+		return true, leafDetached
 	}
-	return false
+	return false, leafDetached
+}
+
+// Detach a leaf from the VC, and automatically detach all servers.
+// This method does not change the underlying topology
+// (e.g., First and Last workerID)
+// To modify the topology, one should call:
+// SimpleTopology.RemoveLeaf(leafID)
+func (vc *VirtualCluster) DetachLeaf(leafID uint16) (bool, []*Node) {
+	isDetached := false
+	var detachedServers []*Node
+	if leaf, ok := vc.Leaves.Load(leafID); ok {
+		for _, server := range leaf.Children {
+			logrus.Debug("Removing server: ", server.ID)
+			serverDetached, leafDetach := vc.DetachServer(server.ID)
+			if serverDetached {
+				detachedServers = append(detachedServers, server)
+			}
+			logrus.Debug("Removed?: ", serverDetached)
+			isDetached = isDetached || leafDetach
+		}
+	}
+	logrus.Debug("LEAF REMOVED: ", isDetached)
+	return isDetached, detachedServers
 }
 
 func (vc *VirtualCluster) Debug() {

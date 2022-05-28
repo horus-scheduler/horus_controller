@@ -96,15 +96,6 @@ func ReadTopologyFile(configName string, configPaths ...string) *topoRootConfig 
 		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
-	for _, s := range cfg.Spines {
-		logrus.Debug(s)
-	}
-	for _, l := range cfg.Leaves {
-		logrus.Debug(l)
-	}
-	for _, r := range cfg.Servers {
-		logrus.Debug(r)
-	}
 
 	return cfg
 }
@@ -119,21 +110,11 @@ func ReadVCsFile(configName string, configPaths ...string) *vcRootConfig {
 	}
 	cfg := &vcRootConfig{}
 
-	logrus.Debug("VCs file...")
-
 	err = viper.UnmarshalKey("vc", &cfg.VCs)
 	if err != nil {
 		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
-	for _, v := range cfg.VCs {
-		logrus.Debug(v.ID)
-		logrus.Debug(v.Spines)
-		for _, r := range v.Servers {
-			logrus.Debug(r)
-		}
-	}
 
-	logrus.Debug("VCs file ends")
 	return cfg
 }
