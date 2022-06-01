@@ -3,7 +3,7 @@ package ctrl_sw
 import (
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
-	house_net "github.com/khaledmdiab/horus_controller/core/net"
+	horus_net "github.com/khaledmdiab/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
 
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
@@ -30,9 +30,9 @@ type leafController struct {
 	*controller
 
 	// Components
-	bus         *LeafBus                   // Main leaf logic
-	rpcEndPoint *house_net.LeafRpcEndpoint // RPC server (Horus messages)
-	healthMgr   *core.LeafHealthManager    // Tracking the health of downstream nodes
+	bus *LeafBus // Main leaf logic
+	// rpcEndPoint *house_net.LeafRpcEndpoint // RPC server (Horus messages)
+	healthMgr *core.LeafHealthManager // Tracking the health of downstream nodes
 }
 
 // Spine-specific logic
@@ -41,7 +41,7 @@ type spineController struct {
 
 	// Components
 	bus         *SpineBus                   // Main spine logic
-	rpcEndPoint *house_net.SpineRpcEndpoint // RPC server (Horus messages)
+	rpcEndPoint *horus_net.SpineRpcEndpoint // RPC server (Horus messages)
 	healthMgr   *core.LeafHealthManager     // Tracking the health of downstream nodes
 }
 
@@ -55,11 +55,12 @@ func NewLeafController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *le
 		vcm.AddVC(vc)
 	}
 
-	asicEgress := make(chan []byte, house_net.DefaultUnixSockSendSize)
-	asicIngress := make(chan []byte, house_net.DefaultUnixSockRecvSize)
-	hmEgress := make(chan *core.LeafHealthMsg, house_net.DefaultUnixSockRecvSize)
-	// rpcIngress := make(chan *horus_pb.HorusMessage, house_net.DefaultRpcRecvSize)
-	// rpcEgress := make(chan *horus_pb.HorusMessage, house_net.DefaultRpcSendSize)
+	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
+	asicIngress := make(chan []byte, horus_net.DefaultUnixSockRecvSize)
+	hmEgress := make(chan *core.LeafHealthMsg, horus_net.DefaultUnixSockRecvSize)
+
+	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
+	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(ctrlID), target)
 
 	healthMgr, err := core.NewLeafHealthManager(ctrlID, hmEgress, topology, vcm, cfg.Timeout)
 	if err != nil {
@@ -67,20 +68,19 @@ func NewLeafController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *le
 	}
 	// TODO: Leaf RPC end point
 	// rpcEndPoint := net.NewLeafRpcEndpoint(cfg.LocalRpcAddress, cfg.RemoteRpcAddress, rpcIngressChan, rpcEgressChan)
-	// TODO: object model
 
 	ch := NewLeafBusChan(hmEgress, nil, nil, asicIngress, asicEgress)
-
-	bus := NewLeafBus(ch, healthMgr)
+	bus := NewLeafBus(ch, healthMgr, bfrt)
 	return &leafController{
-		rpcEndPoint: nil,
-		healthMgr:   healthMgr,
-		bus:         bus,
+		// rpcEndPoint: nil,
+		healthMgr: healthMgr,
+		bus:       bus,
 		controller: &controller{
 			ID:          ctrlID,
 			topology:    topology,
 			vcm:         vcm,
 			cfg:         cfg,
+			bfrt:        bfrt,
 			asicIngress: asicIngress,
 			asicEgress:  asicEgress,
 		},
@@ -97,23 +97,20 @@ func NewSpineController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *s
 		vcm.AddVC(vc)
 	}
 
-	asicEgress := make(chan []byte, house_net.DefaultUnixSockSendSize)
-	asicIngress := make(chan []byte, house_net.DefaultUnixSockRecvSize)
-	activeNode := make(chan *core.LeafHealthMsg, house_net.DefaultUnixSockRecvSize)
-	// rpcIngress := make(chan *horus_pb.HorusMessage, house_net.DefaultRpcRecvSize)
-	// rpcEgress := make(chan *horus_pb.HorusMessage, house_net.DefaultRpcSendSize)
+	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
+	asicIngress := make(chan []byte, horus_net.DefaultUnixSockRecvSize)
+	activeNode := make(chan *core.LeafHealthMsg, horus_net.DefaultUnixSockRecvSize)
+	failedLeaves := make(chan *horus_net.LeafFailedMessage, horus_net.DefaultRpcRecvSize)
 
-	// TODO: Spine Health manager
-	// healthMgr := nil //core.NewLeafHealthManager(activeNode, 1000)
-	// TODO: Spine RPC end point
-	// rpcEndPoint := net.NewSpineRpcEndpoint(cfg.LocalRpcAddress, cfg.RemoteRpcAddress, rpcIngressChan, rpcEgressChan)
-	// TODO: object model
+	spine := topology.GetNode(ctrlID, model.NodeType_Spine)
+	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
+	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(spine.ID), target)
 
-	ch := NewSpineBusChan(activeNode, nil, nil, asicIngress, asicEgress)
-
-	bus := NewSpineBus(ch, nil)
+	rpcEndPoint := horus_net.NewSpineRpcEndpoint(spine.Address, topology, vcm, failedLeaves)
+	ch := NewSpineBusChan(activeNode, failedLeaves, asicIngress, asicEgress)
+	bus := NewSpineBus(ch, nil, bfrt)
 	return &spineController{
-		rpcEndPoint: nil,
+		rpcEndPoint: rpcEndPoint,
 		healthMgr:   nil,
 		bus:         bus,
 		controller: &controller{
@@ -121,6 +118,7 @@ func NewSpineController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *s
 			topology:    topology,
 			vcm:         vcm,
 			cfg:         cfg,
+			bfrt:        bfrt,
 			asicIngress: asicIngress,
 			asicEgress:  asicEgress,
 		},
@@ -129,21 +127,22 @@ func NewSpineController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *s
 
 // Common controller init. logic goes here
 func (c *controller) Start() {
-	logrus.
-		WithFields(logrus.Fields{"ID": c.ID}).
-		Infof("Starting the switch controller")
-	target := bfrtC.NewTarget(bfrtC.WithDeviceId(c.cfg.DeviceID), bfrtC.WithPipeId(c.cfg.PipeID))
-	c.bfrt = bfrtC.NewClient(c.cfg.BfrtAddress, c.cfg.P4Name, uint32(c.ID), target)
 }
 
 func (c *leafController) Start() {
+	logrus.
+		WithFields(logrus.Fields{"ID": c.ID}).
+		Infof("Starting leaf switch controller")
 	c.controller.Start()
 	go c.healthMgr.Start()
 	go c.bus.Start()
 }
 
 func (c *spineController) Start() {
+	logrus.
+		WithFields(logrus.Fields{"ID": c.ID}).
+		Infof("Starting spine switch controller")
 	c.controller.Start()
-	// go c.healthMgr.Start()
-	// go c.evEncDec.Start()
+	go c.rpcEndPoint.Start()
+	go c.bus.Start()
 }

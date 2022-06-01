@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 	"github.com/khaledmdiab/horus_controller/core"
 	horus_net "github.com/khaledmdiab/horus_controller/core/net"
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
@@ -45,15 +46,18 @@ func NewLeafBusChan(hmIngressActiveNode chan *core.LeafHealthMsg,
 type LeafBus struct {
 	*LeafBusChan
 	healthMgr *core.LeafHealthManager
+	bfrt      *bfrtC.Client // BfRt client
 	doneChan  chan bool
 }
 
 // NewLeafBus ...
 func NewLeafBus(busChan *LeafBusChan,
-	healthMgr *core.LeafHealthManager) *LeafBus {
+	healthMgr *core.LeafHealthManager,
+	bfrt *bfrtC.Client) *LeafBus {
 	return &LeafBus{
 		LeafBusChan: busChan,
 		healthMgr:   healthMgr,
+		bfrt:        bfrt,
 		doneChan:    make(chan bool, 1),
 	}
 }

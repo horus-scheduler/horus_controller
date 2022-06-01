@@ -65,9 +65,6 @@ func (hm *LeafHealthManager) OnNodePingRecv(serverId, portId uint16) {
 	if !ok {
 		return
 		// TODO: should we create it?
-		// n := model.NewNode(nodeAddr, nodeId, portId, model.NodeType_Leaf)
-		// node = model.NewTrackableNode(n)
-		// hm.nodes.Store(nodeAddr, node)
 	}
 
 	// Update its internal properties
@@ -83,11 +80,6 @@ func (hm *LeafHealthManager) processNodes() {
 		var failedServers []*model.Node
 		hm.leaf.RLock()
 		for _, server := range hm.leaf.Children {
-			//log.Println("Node ID: ", Node.Id)
-			//log.Println("Healthy? ", Node.Healthy)
-			//log.Println("Ready? ", Node.Ready)
-			//log.Println("================================================================")
-
 			server.Lock()
 			elapsedTime := time.Since(server.LastPingTime)
 			if elapsedTime >= hm.healthyNodeTimeOut {

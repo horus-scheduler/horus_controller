@@ -8,10 +8,10 @@ import (
 )
 
 type binRootConfig struct {
-	AppServer    string
-	TorServer    string
-	TorCount     int
-	TorAddresses []string
+	TopoServer string
+	// TorServer    string
+	// TorCount     int
+	// TorAddresses []string
 }
 
 type topoRootConfig struct {
@@ -74,9 +74,8 @@ func ReadConfigFile(configName string, configPaths ...string) *binRootConfig {
 		log.Fatalf("Fatal error config file: %s \n", err)
 	}
 	cfg := &binRootConfig{}
-	cfg.AppServer = viper.GetString("rpc.local.servers.appServerAddress")
-	cfg.TorServer = viper.GetString("rpc.local.servers.torServerAddress")
-	cfg.TorAddresses = viper.GetStringSlice("tors.addresses")
+	cfg.TopoServer = viper.GetString("rpc.servers.topoAddress")
+	// cfg.TorAddresses = viper.GetStringSlice("tors.addresses")
 
 	return cfg
 }

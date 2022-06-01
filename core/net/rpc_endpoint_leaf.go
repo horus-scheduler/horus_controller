@@ -1,3 +1,6 @@
+//go:build exclude
+// +build exclude
+
 package net
 
 import (
@@ -10,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type SpineRpcEndpoint struct {
+type LeafRpcEndpoint struct {
 	lAddress string
 	rAddress string
 
@@ -20,10 +23,10 @@ type SpineRpcEndpoint struct {
 	doneChan chan bool
 }
 
-func NewSpineRpcEndpoint(lAddress, rAddress string,
+func NewLeafRpcEndpoint(lAddress, rAddress string,
 	rpcIngressChan chan *horus_pb.HorusMessage,
-	rpcEgressChan chan *horus_pb.HorusMessage) *SpineRpcEndpoint {
-	return &SpineRpcEndpoint{
+	rpcEgressChan chan *horus_pb.HorusMessage) *LeafRpcEndpoint {
+	return &LeafRpcEndpoint{
 		lAddress: lAddress,
 		rAddress: rAddress,
 		incoming: rpcIngressChan,
@@ -32,7 +35,7 @@ func NewSpineRpcEndpoint(lAddress, rAddress string,
 	}
 }
 
-func (s *SpineRpcEndpoint) createListener() {
+func (s *LeafRpcEndpoint) createListener() {
 	// lis, err := net.Listen("tcp4", s.lAddress)
 	// if err != nil {
 	// 	log.Println(err)
@@ -45,7 +48,7 @@ func (s *SpineRpcEndpoint) createListener() {
 	// }
 }
 
-func (s *SpineRpcEndpoint) createConnPool() {
+func (s *LeafRpcEndpoint) createConnPool() {
 	var factory grpcpool.Factory
 	factory = func() (*grpc.ClientConn, error) {
 		conn, err := grpc.Dial(s.rAddress, grpc.WithInsecure())
@@ -61,7 +64,7 @@ func (s *SpineRpcEndpoint) createConnPool() {
 	}
 }
 
-func (s *SpineRpcEndpoint) sendSyncEvent(e *horus_pb.MdcSyncEvent) error {
+func (s *LeafRpcEndpoint) sendSyncEvent(e *horus_pb.MdcSyncEvent) error {
 	conn, err := s.connPool.Get(context.Background())
 	if err != nil {
 		log.Println(err)
@@ -73,7 +76,7 @@ func (s *SpineRpcEndpoint) sendSyncEvent(e *horus_pb.MdcSyncEvent) error {
 	return err
 }
 
-func (s *SpineRpcEndpoint) processEvents() {
+func (s *LeafRpcEndpoint) processEvents() {
 	// for {
 	// 	select {
 	// 	case syncEv := <-s.syncEvents:
@@ -87,7 +90,7 @@ func (s *SpineRpcEndpoint) processEvents() {
 	// }
 }
 
-func (s *SpineRpcEndpoint) Start() {
+func (s *LeafRpcEndpoint) Start() {
 	// create a pool of gRPC connections. used to send SyncEvent messages
 	s.createConnPool()
 

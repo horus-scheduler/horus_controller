@@ -1,8 +1,9 @@
 package ctrl_sw
 
 import (
+	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 	"github.com/khaledmdiab/horus_controller/core"
-	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
+	horus_net "github.com/khaledmdiab/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
 )
 
@@ -13,8 +14,7 @@ type SpineBusChan struct {
 	// send-to healthManager
 
 	// gRPC channels
-	rpcIngress chan *horus_pb.HorusResponse // recv-from gRPC connection
-	rpcEgress  chan *horus_pb.HorusResponse // send-to gRPC client
+	rpcFailedLeaves chan *horus_net.LeafFailedMessage // recv-from gRPC
 
 	// ASIC channels
 	asicIngress chan []byte // recv-from the ASIC
@@ -23,14 +23,12 @@ type SpineBusChan struct {
 
 // NewSpineBusChan ...
 func NewSpineBusChan(hmIngressActiveNode chan *core.LeafHealthMsg,
-	rpcIngress chan *horus_pb.HorusResponse,
-	rpcEgress chan *horus_pb.HorusResponse,
+	rpcFailedLeaves chan *horus_net.LeafFailedMessage,
 	asicIngress chan []byte,
 	asicEgress chan []byte) *SpineBusChan {
 	return &SpineBusChan{
 		hmIngressActiveNode: hmIngressActiveNode,
-		rpcIngress:          rpcIngress,
-		rpcEgress:           rpcEgress,
+		rpcFailedLeaves:     rpcFailedLeaves,
 		asicIngress:         asicIngress,
 		asicEgress:          asicEgress,
 	}
@@ -40,30 +38,32 @@ func NewSpineBusChan(hmIngressActiveNode chan *core.LeafHealthMsg,
 type SpineBus struct {
 	*SpineBusChan
 	healthMgr *core.LeafHealthManager
+	bfrt      *bfrtC.Client // BfRt client
 	doneChan  chan bool
 }
 
 // NewSpineBus ...
 func NewSpineBus(busChan *SpineBusChan,
-	healthMgr *core.LeafHealthManager) *SpineBus {
+	healthMgr *core.LeafHealthManager,
+	bfrt *bfrtC.Client) *SpineBus {
 	return &SpineBus{
 		SpineBusChan: busChan,
 		healthMgr:    healthMgr,
+		bfrt:         bfrt,
 		doneChan:     make(chan bool, 1),
 	}
 }
 
-func (e *SpineBus) processIngress() {
+func (bus *SpineBus) processIngress() {
 	for {
 		select {
-		case message := <-e.rpcIngress:
+		case message := <-bus.rpcFailedLeaves:
 			// TODO: receives a msg that a leaf had failed
+			// Notice: At this stage, the failed leaf has already been removed and detached
 			go func() {
 				logrus.Debug(message)
+				logrus.Debug("Using BfRt Client")
 			}()
-
-		case activeNodeMsg := <-e.hmIngressActiveNode:
-			logrus.Debugf("Send set-active-agent to switch %v", activeNodeMsg)
 
 		default:
 			continue
