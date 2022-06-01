@@ -1,22 +1,14 @@
 package model
 
 import (
+	"errors"
+	"strconv"
 	"sync"
 
 	"github.com/sirupsen/logrus"
 )
 
-type TopologyNodeType int
-
-const (
-	CoreNode TopologyNodeType = iota
-	AggNode
-	TorNode
-	HostNode
-)
-
-// TODO consider changing the internal slices to maps
-type SimpleTopology struct {
+type Topology struct {
 	sync.RWMutex
 	Root    *Node
 	Servers *NodeMap
@@ -25,8 +17,8 @@ type SimpleTopology struct {
 	Cores   *NodeMap
 }
 
-func NewSimpleTopology(topoCfg *topoRootConfig) *SimpleTopology {
-	s := &SimpleTopology{
+func NewDCNTopology(topoCfg *topoRootConfig) *Topology {
+	s := &Topology{
 		Servers: NewNodeMap(),
 		Leaves:  NewNodeMap(),
 		Spines:  NewNodeMap(),
@@ -72,7 +64,7 @@ func NewSimpleTopology(topoCfg *topoRootConfig) *SimpleTopology {
 	return s
 }
 
-func (s *SimpleTopology) GetNode(nodeId uint16, nodeType NodeType) *Node {
+func (s *Topology) GetNode(nodeId uint16, nodeType NodeType) *Node {
 	var nodes *NodeMap
 	if nodeType == NodeType_Server {
 		nodes = s.Servers
@@ -90,7 +82,7 @@ func (s *SimpleTopology) GetNode(nodeId uint16, nodeType NodeType) *Node {
 }
 
 // Assumes that addresses are unique per Servers, Leaves, and Spines
-func (s *SimpleTopology) GetNodeByAddress(nodeAddress string, nodeType NodeType) *Node {
+func (s *Topology) GetNodeByAddress(nodeAddress string, nodeType NodeType) *Node {
 	var nodes *NodeMap
 	if nodeType == NodeType_Server {
 		nodes = s.Servers
@@ -107,9 +99,27 @@ func (s *SimpleTopology) GetNodeByAddress(nodeAddress string, nodeType NodeType)
 	return nil
 }
 
+func (s *Topology) AddServerToLeaf(srvConfig *serverConfig, leafID uint16) (*Node, error) {
+	leaf := s.GetNode(leafID, NodeType_Leaf)
+	if leaf == nil {
+		return nil, errors.New("Leaf " + strconv.Itoa(int(leafID)) + " doesn't exist!")
+	}
+
+	server := NewNode(srvConfig.Address, srvConfig.ID, srvConfig.PortID, NodeType_Server)
+	server.Parent = leaf
+	leaf.Children = append(leaf.Children, server)
+	workerID := leaf.LastWorkerID + 1
+	server.FirstWorkerID = workerID
+	workerID += srvConfig.WorkersCount
+	server.LastWorkerID = workerID - 1
+	leaf.LastWorkerID = server.LastWorkerID
+	s.Servers.Store(server.ID, server)
+	return server, nil
+}
+
 // Input: Global serverID
 // Output: a list of updated servers
-func (s *SimpleTopology) RemoveServer(serverID uint16) []*Node {
+func (s *Topology) RemoveServer(serverID uint16) []*Node {
 	server := s.GetNode(serverID, NodeType_Server)
 	var updatedServers []*Node
 	if server == nil {
@@ -140,17 +150,14 @@ func (s *SimpleTopology) RemoveServer(serverID uint16) []*Node {
 	} else {
 		leaf.LastWorkerID = workerID - 1
 	}
-
 	leaf.Children = append(leaf.Children[:removedIdx], leaf.Children[removedIdx+1:]...)
-
 	s.Servers.Delete(serverID)
-
 	return updatedServers
 }
 
 // Return the local index of the removed leaf within the spine
 // Input: Global leafID
-func (s *SimpleTopology) RemoveLeaf(leafID uint16) int {
+func (s *Topology) RemoveLeaf(leafID uint16) int {
 	leaf := s.GetNode(leafID, NodeType_Leaf)
 
 	if leaf == nil {
@@ -181,7 +188,7 @@ func (s *SimpleTopology) RemoveLeaf(leafID uint16) int {
 	return removedIdx
 }
 
-func (s *SimpleTopology) Debug() {
+func (s *Topology) Debug() {
 	logrus.Debug("Spines Count=", len(s.Spines.Internal()))
 	logrus.Debug("Leaves Count=", len(s.Leaves.Internal()))
 	logrus.Debug("Servers Count=", len(s.Servers.Internal()))

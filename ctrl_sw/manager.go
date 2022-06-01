@@ -35,13 +35,13 @@ func initLogger() {
 	})
 }
 
-func NewSwitchManager(opts ...SwitchManagerOption) *switchManager {
+func NewSwitchManager(topoFp, vcsFp, cfgFp string, opts ...SwitchManagerOption) *switchManager {
 	// Initialize program-related structures
 	initLogger()
 	net.InitHorusDefinitions()
 
 	// Read configuration
-	cfg := ReadConfigFile("")
+	cfg := ReadConfigFile(cfgFp)
 
 	// Initialize program status
 	status := core.NewCtrlStatus()
@@ -49,15 +49,14 @@ func NewSwitchManager(opts ...SwitchManagerOption) *switchManager {
 	// Initialize leaf and spine controllers
 	var leaves []*leafController
 	var spines []*spineController
-	// for ctrlIdx, ctrl := range cfg.LeafIDs {
-	// 	if ctrl.Type == "leaf" {
-	// 		newCtrl := NewLeafController(uint16(ctrlIdx+1), &ctrl, cfg)
-	// 		leaves = append(leaves, newCtrl)
-	// 	} else if ctrl.Type == "spine" {
-	// 		newCtrl := NewSpineController(uint16(ctrlIdx+1), &ctrl, cfg)
-	// 		spines = append(spines, newCtrl)
-	// 	}
-	// }
+	for _, ctrlID := range cfg.LeafIDs {
+		newCtrl := NewLeafController(ctrlID, topoFp, vcsFp, cfg)
+		leaves = append(leaves, newCtrl)
+	}
+	for _, ctrlID := range cfg.SpineIDs {
+		newCtrl := NewSpineController(ctrlID, topoFp, vcsFp, cfg)
+		spines = append(spines, newCtrl)
+	}
 
 	// ASIC <-> CPU interface.
 	asicIngress := make(chan []byte, net.DefaultUnixSockSendSize)

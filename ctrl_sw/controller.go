@@ -2,18 +2,20 @@ package ctrl_sw
 
 import (
 	"github.com/khaledmdiab/horus_controller/core"
-	"github.com/khaledmdiab/horus_controller/core/net"
-	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
+	"github.com/khaledmdiab/horus_controller/core/model"
+	house_net "github.com/khaledmdiab/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
 
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 )
 
 type controller struct {
-	Index   uint16
 	ID      uint16
 	Address string
 	cfg     *rootConfig
+
+	topology *model.Topology
+	vcm      *core.VCManager
 
 	// Controller components
 	bfrt *bfrtC.Client // BfRt client
@@ -28,9 +30,9 @@ type leafController struct {
 	*controller
 
 	// Components
-	evEncDec    *LeafEventEncDec        // Main leaf logic
-	rpcEndPoint *net.LeafRpcEndpoint    // RPC server (Horus messages)
-	healthMgr   *core.NodeHealthManager // Tracking the health of downstream nodes
+	bus         *LeafBus                   // Main leaf logic
+	rpcEndPoint *house_net.LeafRpcEndpoint // RPC server (Horus messages)
+	healthMgr   *core.LeafHealthManager    // Tracking the health of downstream nodes
 }
 
 // Spine-specific logic
@@ -38,40 +40,46 @@ type spineController struct {
 	*controller
 
 	// Components
-	evEncDec    *SpineEventEncDec       // Main spine logic
-	rpcEndPoint *net.SpineRpcEndpoint   // RPC server (Horus messages)
-	healthMgr   *core.NodeHealthManager // Tracking the health of downstream nodes
+	bus         *SpineBus                   // Main spine logic
+	rpcEndPoint *house_net.SpineRpcEndpoint // RPC server (Horus messages)
+	healthMgr   *core.LeafHealthManager     // Tracking the health of downstream nodes
 }
 
-// TODO: create (for leaf/spine):
-// 1. Health manager
-// 2. Event Encoder/Decoder
+func NewLeafController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *leafController {
+	topoCfg := model.ReadTopologyFile(topoFp)
+	vcsConf := model.ReadVCsFile(vcsFp)
+	topology := model.NewDCNTopology(topoCfg)
+	vcm := core.NewVCManager(topology)
+	for _, vcConf := range vcsConf.VCs {
+		vc := model.NewVC(vcConf, topology)
+		vcm.AddVC(vc)
+	}
 
-func NewLeafController(index uint16, cfg *rootConfig) *leafController {
-	asicEgress := make(chan []byte, net.DefaultUnixSockSendSize)
-	asicIngress := make(chan []byte, net.DefaultUnixSockRecvSize)
-	activeNode := make(chan *core.HealthManagerMsg, net.DefaultUnixSockRecvSize)
-	rpcIngress := make(chan *horus_pb.HorusMessage, net.DefaultRpcRecvSize)
-	rpcEgress := make(chan *horus_pb.HorusMessage, net.DefaultRpcSendSize)
+	asicEgress := make(chan []byte, house_net.DefaultUnixSockSendSize)
+	asicIngress := make(chan []byte, house_net.DefaultUnixSockRecvSize)
+	hmEgress := make(chan *core.LeafHealthMsg, house_net.DefaultUnixSockRecvSize)
+	// rpcIngress := make(chan *horus_pb.HorusMessage, house_net.DefaultRpcRecvSize)
+	// rpcEgress := make(chan *horus_pb.HorusMessage, house_net.DefaultRpcSendSize)
 
-	// TODO: Leaf Health manager
-	healthMgr := core.NewNodeHealthManager(activeNode, 1000)
+	healthMgr, err := core.NewLeafHealthManager(ctrlID, hmEgress, topology, vcm, cfg.Timeout)
+	if err != nil {
+		logrus.Fatal(err)
+	}
 	// TODO: Leaf RPC end point
 	// rpcEndPoint := net.NewLeafRpcEndpoint(cfg.LocalRpcAddress, cfg.RemoteRpcAddress, rpcIngressChan, rpcEgressChan)
 	// TODO: object model
 
-	ch := NewLeafEventEncDecChan(activeNode, rpcIngress, rpcEgress,
-		asicIngress, asicEgress)
+	ch := NewLeafBusChan(hmEgress, nil, nil, asicIngress, asicEgress)
 
-	evEncDec := NewLeafEventEncDec(ch, healthMgr)
+	bus := NewLeafBus(ch, healthMgr)
 	return &leafController{
 		rpcEndPoint: nil,
 		healthMgr:   healthMgr,
-		evEncDec:    evEncDec,
+		bus:         bus,
 		controller: &controller{
-			Index: index,
-			// ID:          ctrl.ID,
-			// Address:     ctrl.Address,
+			ID:          ctrlID,
+			topology:    topology,
+			vcm:         vcm,
 			cfg:         cfg,
 			asicIngress: asicIngress,
 			asicEgress:  asicEgress,
@@ -79,31 +87,39 @@ func NewLeafController(index uint16, cfg *rootConfig) *leafController {
 	}
 }
 
-func NewSpineController(index uint16, cfg *rootConfig) *spineController {
-	asicEgress := make(chan []byte, net.DefaultUnixSockSendSize)
-	asicIngress := make(chan []byte, net.DefaultUnixSockRecvSize)
-	activeNode := make(chan *core.HealthManagerMsg, net.DefaultUnixSockRecvSize)
-	rpcIngress := make(chan *horus_pb.HorusMessage, net.DefaultRpcRecvSize)
-	rpcEgress := make(chan *horus_pb.HorusMessage, net.DefaultRpcSendSize)
+func NewSpineController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *spineController {
+	topoCfg := model.ReadTopologyFile(topoFp)
+	vcsConf := model.ReadVCsFile(vcsFp)
+	topology := model.NewDCNTopology(topoCfg)
+	vcm := core.NewVCManager(topology)
+	for _, vcConf := range vcsConf.VCs {
+		vc := model.NewVC(vcConf, topology)
+		vcm.AddVC(vc)
+	}
+
+	asicEgress := make(chan []byte, house_net.DefaultUnixSockSendSize)
+	asicIngress := make(chan []byte, house_net.DefaultUnixSockRecvSize)
+	activeNode := make(chan *core.LeafHealthMsg, house_net.DefaultUnixSockRecvSize)
+	// rpcIngress := make(chan *horus_pb.HorusMessage, house_net.DefaultRpcRecvSize)
+	// rpcEgress := make(chan *horus_pb.HorusMessage, house_net.DefaultRpcSendSize)
 
 	// TODO: Spine Health manager
-	healthMgr := core.NewNodeHealthManager(activeNode, 1000)
+	// healthMgr := nil //core.NewLeafHealthManager(activeNode, 1000)
 	// TODO: Spine RPC end point
 	// rpcEndPoint := net.NewSpineRpcEndpoint(cfg.LocalRpcAddress, cfg.RemoteRpcAddress, rpcIngressChan, rpcEgressChan)
 	// TODO: object model
 
-	ch := NewSpineEventEncDecChan(activeNode, rpcIngress, rpcEgress,
-		asicIngress, asicEgress)
+	ch := NewSpineBusChan(activeNode, nil, nil, asicIngress, asicEgress)
 
-	evEncDec := NewSpineEventEncDec(ch, healthMgr)
+	bus := NewSpineBus(ch, nil)
 	return &spineController{
 		rpcEndPoint: nil,
 		healthMgr:   nil,
-		evEncDec:    evEncDec,
+		bus:         bus,
 		controller: &controller{
-			Index: index,
-			// ID:          ctrl.ID,
-			// Address:     ctrl.Address,
+			ID:          ctrlID,
+			topology:    topology,
+			vcm:         vcm,
 			cfg:         cfg,
 			asicIngress: asicIngress,
 			asicEgress:  asicEgress,
@@ -114,16 +130,16 @@ func NewSpineController(index uint16, cfg *rootConfig) *spineController {
 // Common controller init. logic goes here
 func (c *controller) Start() {
 	logrus.
-		WithFields(logrus.Fields{"index": c.Index}).
+		WithFields(logrus.Fields{"ID": c.ID}).
 		Infof("Starting the switch controller")
 	target := bfrtC.NewTarget(bfrtC.WithDeviceId(c.cfg.DeviceID), bfrtC.WithPipeId(c.cfg.PipeID))
-	c.bfrt = bfrtC.NewClient(c.cfg.BfrtAddress, c.cfg.P4Name, uint32(c.Index), target)
+	c.bfrt = bfrtC.NewClient(c.cfg.BfrtAddress, c.cfg.P4Name, uint32(c.ID), target)
 }
 
 func (c *leafController) Start() {
 	c.controller.Start()
 	go c.healthMgr.Start()
-	go c.evEncDec.Start()
+	go c.bus.Start()
 }
 
 func (c *spineController) Start() {

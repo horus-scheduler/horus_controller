@@ -25,10 +25,7 @@ type Node struct {
 
 	FirstWorkerID uint16 // valid if Type == leaf | server
 	LastWorkerID  uint16 // valid if Type == leaf | server
-}
 
-type TrackableNode struct {
-	*Node
 	LastPingTime time.Time
 	Healthy      bool
 	Ready        bool
@@ -41,14 +38,6 @@ func NewNode(address string, id, portId uint16, nodeType NodeType) *Node {
 		Type:     nodeType,
 		Parent:   nil,
 		Children: make([]*Node, 0),
-	}
-}
-
-func NewTrackableNode(node *Node) *TrackableNode {
-	return &TrackableNode{Node: node,
-		LastPingTime: time.Now(),
-		Healthy:      true,
-		Ready:        false,
 	}
 }
 
@@ -85,36 +74,5 @@ func (rm *NodeMap) Delete(key uint16) {
 func (rm *NodeMap) Store(key uint16, value *Node) {
 	rm.Lock()
 	rm.internal[key] = value
-	rm.Unlock()
-}
-
-type TrackableNodeMap struct {
-	sync.RWMutex
-	// TODO: shouldn't be public!
-	Internal map[string]*TrackableNode
-}
-
-func NewTrackableNodeMap() *TrackableNodeMap {
-	return &TrackableNodeMap{
-		Internal: make(map[string]*TrackableNode),
-	}
-}
-
-func (rm *TrackableNodeMap) Load(key string) (value *TrackableNode, ok bool) {
-	rm.RLock()
-	result, ok := rm.Internal[key]
-	rm.RUnlock()
-	return result, ok
-}
-
-func (rm *TrackableNodeMap) Delete(key string) {
-	rm.Lock()
-	delete(rm.Internal, key)
-	rm.Unlock()
-}
-
-func (rm *TrackableNodeMap) Store(key string, value *TrackableNode) {
-	rm.Lock()
-	rm.Internal[key] = value
 	rm.Unlock()
 }

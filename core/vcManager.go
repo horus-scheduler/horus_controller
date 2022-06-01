@@ -94,13 +94,13 @@ func (rm *vcListMap) RemoveFromVCList(key uint16, vc *model.VirtualCluster) {
 
 // Manages all VCs in the system
 type VCManager struct {
-	vcs       *vcMap
-	serverVCs *vcListMap
-	leafVCs   *vcListMap
-	topology  *model.SimpleTopology
+	vcs       *vcMap     // clusterID -> *VirtualCluster
+	serverVCs *vcListMap // serverID -> []*VirtualCluster: all VCs belonging to this server
+	leafVCs   *vcListMap // leafID -> []*VirtualCluster: all VCs belonging to this leaf
+	topology  *model.Topology
 }
 
-func NewVCManager(topology *model.SimpleTopology) *VCManager {
+func NewVCManager(topology *model.Topology) *VCManager {
 	return &VCManager{
 		vcs:       newVCMap(),
 		serverVCs: newVCListMap(),
@@ -175,6 +175,7 @@ func (vcm *VCManager) DetachLeaf(leafID uint16) bool {
 	vcs, found := vcm.GetVCsOfLeaf(leafID)
 	detached := true
 	if found {
+		// For each VC: detach the leaf and servers
 		for _, vc := range vcs {
 			leafDetached, detachedServers := vc.DetachLeaf(leafID)
 			detached = detached && leafDetached
@@ -199,7 +200,6 @@ func (vcm *VCManager) Debug() {
 			logrus.Debug("-- Server ID: ", sID)
 			var line []string
 			for _, vc := range vcs {
-				// vc.Debug()
 				line = append(line, strconv.Itoa(int(vc.ClusterID)))
 			}
 			logrus.Debug("---- VCs: ", strings.Join(line, ", "))
@@ -213,8 +213,6 @@ func (vcm *VCManager) Debug() {
 			logrus.Debug("-- Leaf ID: ", lID)
 			var line []string
 			for _, vc := range vcs {
-				// vc.Debug()
-				// logrus.Debug(vc.Leaves.Internal())
 				line = append(line, strconv.Itoa(int(vc.ClusterID)))
 			}
 			logrus.Debug("---- VCs: ", strings.Join(line, ", "))
@@ -224,23 +222,6 @@ func (vcm *VCManager) Debug() {
 }
 
 /*
-func (sm *SessionManager) ActivateSession(sessionAddress string) *model.MulticastTree {
-	if s, found := sm.sessions.Load(sessionAddress); found {
-		s.Activate()
-		return sm.algorithm.OnSessionActivated(s)
-	}
-	return nil
-}
-
-func (sm *SessionManager) DeactivateSession(sessionAddress string) *model.MulticastTree {
-	if s, found := sm.sessions.Load(sessionAddress); found {
-		s.Deactivate()
-		return sm.algorithm.OnSessionDeactivated(s)
-	}
-	return nil
-}
-
-
 func (sm *SessionManager) AddReceiver(sessionAddress string, receiver *model.Node) *model.MulticastTree {
 	if s, found := sm.sessions.Load(sessionAddress); found {
 		s.AddReceiver(receiver)

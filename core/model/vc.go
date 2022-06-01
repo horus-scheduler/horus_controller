@@ -16,7 +16,7 @@ type VirtualCluster struct {
 	Servers   *NodeMap
 }
 
-func NewVC(vcConfig *vcConfig, topology *SimpleTopology) *VirtualCluster {
+func NewVC(vcConfig *vcConfig, topology *Topology) *VirtualCluster {
 	s := &VirtualCluster{ClusterID: vcConfig.ID,
 		Active: true,
 		Client: nil, // TODO
@@ -69,7 +69,6 @@ func (vc *VirtualCluster) Deactivate() {
 // bool: the server is detached
 // bool: a leaf is detached
 func (vc *VirtualCluster) DetachServer(serverID uint16) (bool, bool) {
-	// TODO: Should we detach Spines?
 	leafDetached := false
 	if server, ok := vc.Servers.Load(serverID); ok {
 		leaf := server.Parent

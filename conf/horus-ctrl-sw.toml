@@ -21,3 +21,4 @@ title = "Horus switch controller"
 [controllers]
     spines = [0]
     leaves = [0, 1, 2]
+    timeout = 1000 # in milliseconds

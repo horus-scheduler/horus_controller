@@ -3,20 +3,20 @@ package ctrl_sw
 import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/khaledmdiab/horus_controller/core/net"
 	horus_net "github.com/khaledmdiab/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
 )
 
 type asicEndPoint struct {
 	ifName string
-	client *net.RawSockClient
+	client *horus_net.RawSockClient
 
 	// Leaf controllers channels
 	leafIngress map[uint16]chan []byte
 	leafEgress  map[uint16]chan []byte
 
 	// Spine controllers channels
+	// TODO: spine controllers *currently* don't talk with the ASIC
 	spineIngress map[uint16]chan []byte
 	spineEgress  map[uint16]chan []byte
 
@@ -33,13 +33,15 @@ func NewAsicEndPoint(ifName string,
 	asicIngress chan []byte,
 	asicEgress chan []byte) *asicEndPoint {
 
-	client := net.NewRawSockClient(ifName, asicEgress, asicIngress)
+	client := horus_net.NewRawSockClient(ifName, asicEgress, asicIngress)
 
 	leafIngress := make(map[uint16]chan []byte)
 	leafEgress := make(map[uint16]chan []byte)
 	spineIngress := make(map[uint16]chan []byte)
 	spineEgress := make(map[uint16]chan []byte)
 
+	// TODO: if we plan to update leaves (add/remove) during run-time,
+	// we need to update these channels as well
 	for _, l := range leaves {
 		leafIngress[l.ID] = l.asicIngress
 		leafEgress[l.ID] = l.asicEgress
@@ -76,19 +78,10 @@ func (a *asicEndPoint) read() {
 			if horusLayer := pkt.Layer(horus_net.LayerTypeHorus); horusLayer != nil {
 				horus, _ := horusLayer.(*horus_net.HorusPacket)
 				dstID := horus.DstID
-				switch horus.DstType {
-				case horus_net.DST_TYPE_LEAF:
-					if ch, found := a.leafIngress[dstID]; found {
-						ch <- pkt.Data()
-					} else {
-						logrus.Warn("Leaf controller", dstID, "does not exist!")
-					}
-				case horus_net.DST_TYPE_SPINE:
-					if ch, found := a.spineIngress[dstID]; found {
-						ch <- pkt.Data()
-					} else {
-						logrus.Warn("Spine controller", dstID, "does not exist!")
-					}
+				if ch, found := a.leafIngress[dstID]; found {
+					ch <- pkt.Data()
+				} else {
+					logrus.Warn("Leaf controller ", dstID, " does not exist!")
 				}
 			}
 		}

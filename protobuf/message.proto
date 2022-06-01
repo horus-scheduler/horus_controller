@@ -1,134 +1,41 @@
 syntax = "proto3";
 package horus.pb;
-//option go_package = "github.com/khaledmdiab/horus_controller/protobuf";
 option go_package = "./protobuf";
 
-// Terminologies
-
-// common messages
-
-// generic response
-message MdcEventResponse {
+message HorusResponse {
     string status = 1;
 }
 
-message HorusMessage {
-    string srcID = 1;
-    string dstID = 2;
-
-    enum NodeType {
-        CENTRAL = 0;
-        SPINE = 1;
-        LEAF = 2;
-        WORKER = 3;
-    }
-    NodeType srcType = 3;
-    NodeType dstType = 4;
-    enum MessageType {
-        HELLO = 0;
-        OK = 1;
-        ERROR = 2;
-        
-    }
-    MessageType messageType = 5;
-
-    oneof message {
-        string stringMsg = 6;
-        bytes bytesMsg = 7;
-    }    
+message VCInfo {
+    uint32 id = 1;
+    repeated uint32 spines = 2;
+    repeated ServerInfo servers = 3;
 }
 
-
-// from Controller to ToR to update sessions
-message MdcSessionUpdateEvent {
-    uint32 torId = 1;
-    uint32 sequenceId = 2;
-    message SessionLabel {
-        bytes sessionAddress = 1;
-        uint32 label = 2;
-    }
-    repeated SessionLabel sessions = 3;
+message LeafInfo {
+    uint32 id = 1;
+    string address = 2;
+    repeated ServerInfo servers = 3;
+    uint32 spineID = 4;
 }
 
-// from Controller to ToR (ToR of source, and ToRs of all receivers)
-service MdcSessionUpdater {
-    rpc UpdateState (MdcSessionUpdateEvent) returns (MdcEventResponse) {}
+message ServerInfo {
+    uint32 id = 1;
+    uint32 port_id = 2;
+    string address = 3;
+    uint32 workers_count = 4;
+    uint32 leafID = 5;
 }
 
-///////////////////////////************** ******************///////////////////////////
-
-// from ToR to controller to confirm the updates
-message MdcSyncEvent {
-    uint32 torId = 1;
-    uint32 sequenceId = 2;
-    repeated bytes sessionAddresses = 3;
+service HorusTopology {
+    rpc AddLeaf(LeafInfo) returns (HorusResponse) {}
+    rpc FailLeaf(LeafInfo) returns (HorusResponse) {}
+    rpc AddServer(ServerInfo) returns (HorusResponse) {}
+    rpc FailServer(ServerInfo) returns (HorusResponse) {}
 }
 
-// from ToR to controller
-service MdcControllerNotifier {
-    rpc SyncState (MdcSyncEvent) returns (MdcEventResponse) {}
-    rpc SyncDone (MdcSyncEvent) returns (MdcEventResponse) {}
+service HorusVC {
+    rpc AddVC(VCInfo) returns (HorusResponse) {}
+    rpc RemoveVC(VCInfo) returns (HorusResponse) {}
 }
 
-
-///////////////////////////************** ******************///////////////////////////
-
-// Controller-App messages (from App to Controller)
-message MdcAppEvent {
-    bytes sessionAddress = 1;
-    uint32 torId = 2;
-    uint32 hostId = 3;
-    EventType type = 4;
-    float timeIdx = 5;
-
-    enum EventType {
-        Create = 0;
-        Join = 1;
-        Leave = 2;
-    }
-}
-
-// from App to Controller to initialize Agent
-service MdcAppNotifier {
-    rpc StartSession(MdcAppEvent) returns (MdcEventResponse) {}
-    rpc JoinSession(MdcAppEvent) returns (MdcEventResponse) {}
-    rpc LeaveSession(MdcAppEvent) returns (MdcEventResponse) {}
-}
-
-///////////////////////////************** ******************///////////////////////////
-
-//// Controller-Agent messages (from Agent to Controller)
-//service MdcAgentNotifier {
-//    rpc Sync(MdcAgentEvent) returns (MdcEventResponse) {}
-//    rpc RequestSessions(MdcAgentSessionRequestEvent) returns (MdcEventResponse) {}
-//}
-//
-//// from Agent or ToR to Controller to initialize Agent
-//message MdcAgentEvent {
-//    string agentAddress = 1;
-//    AgentStatus status = 2;
-//    float timeIdx = 3;
-//
-//    enum AgentStatus {
-//        Initializing = 0; // from Agent
-//        Started = 1; // from Agent
-//        Failed = 2; // from ToR control plane
-//    }
-//}
-//
-//// from Agent to Controller to request session-label mapping
-//message MdcAgentSessionRequestEvent {
-//    string sessionAddress = 1;
-//    float timeIdx = 2;
-//}
-
-
-
-
-///////////////////////////************** ******************///////////////////////////
-
-//// Controller-ToR messages (from Controller to ToR)
-//service MdcToRNotifier {
-//    // from controller to ToR
-//    rpc UpdateState(MdcSessionUpdateEvent) returns (MdcEventResponse) {}
-//}

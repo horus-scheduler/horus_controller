@@ -19,20 +19,25 @@ type rootConfig struct {
 	AsicIntf string
 	SpineIDs []uint16
 	LeafIDs  []uint16
+	Timeout  int64
 }
 
 func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
-	cfgName := "horus-ctrl-sw"
 	if configName != "" {
-		cfgName = configName
-	}
-	viper.SetConfigName(cfgName)
-	viper.AddConfigPath("/etc/horus/")  // path to look for the config file in
-	viper.AddConfigPath("$HOME/.horus") // call multiple times to add many search paths
-	viper.AddConfigPath(".")
-	viper.AddConfigPath("./conf")
-	for _, confPath := range configPaths {
-		viper.AddConfigPath(confPath)
+		logrus.Debugf("Using the provided manager configuration file %s", configName)
+		viper.SetConfigFile(configName)
+	} else {
+		logrus.Debugf("Using the default manager configuration file")
+		cfgName := "horus-ctrl-sw"
+
+		viper.SetConfigName(cfgName)
+		viper.AddConfigPath("/etc/horus/")  // path to look for the config file in
+		viper.AddConfigPath("$HOME/.horus") // call multiple times to add many search paths
+		viper.AddConfigPath(".")
+		viper.AddConfigPath("./conf")
+		for _, confPath := range configPaths {
+			viper.AddConfigPath(confPath)
+		}
 	}
 
 	err := viper.ReadInConfig() // Find and read the config file
@@ -45,20 +50,17 @@ func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
 	cfg.DeviceID = viper.GetUint32("asic.device_id")
 	cfg.PipeID = viper.GetUint32("asic.pipe_id")
 	cfg.BfrtAddress = viper.GetString("bfrt.address")
-
+	cfg.Timeout = viper.GetInt64("controllers.timeout")
 	err = viper.UnmarshalKey("controllers.spines", &cfg.SpineIDs)
 	if err != nil {
 		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
-	logrus.Debug(cfg.SpineIDs)
-
 	err = viper.UnmarshalKey("controllers.leaves", &cfg.LeafIDs)
 	if err != nil {
 		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
-	logrus.Debug(cfg.LeafIDs)
 
 	return cfg
 }

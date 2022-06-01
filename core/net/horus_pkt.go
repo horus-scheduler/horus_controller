@@ -34,7 +34,6 @@ type HorusPacket struct {
 	ClusterID uint16
 	SrcID     uint16
 	DstID     uint16
-	DstType   uint16
 	QLen      uint16
 	SeqNum    uint16
 	// fields below are sample app layer headers: not needed for task scheduling and not parsed by switches
@@ -96,7 +95,7 @@ func (horus *HorusPacket) NextLayerType() gopacket.LayerType {
 // See the docs for gopacket.SerializableLayer for more info.
 func (horus *HorusPacket) SerializeTo(b gopacket.SerializeBuffer, opts gopacket.SerializeOptions) error {
 	//payload := b.Bytes()
-	bytes, err := b.PrependBytes(13)
+	bytes, err := b.PrependBytes(11)
 	if err != nil {
 		return err
 	}
@@ -104,9 +103,8 @@ func (horus *HorusPacket) SerializeTo(b gopacket.SerializeBuffer, opts gopacket.
 	binary.BigEndian.PutUint16(bytes[1:], horus.ClusterID)
 	binary.BigEndian.PutUint16(bytes[3:], horus.SrcID)
 	binary.BigEndian.PutUint16(bytes[5:], horus.DstID)
-	binary.BigEndian.PutUint16(bytes[7:], horus.DstType)
-	binary.BigEndian.PutUint16(bytes[9:], horus.QLen)
-	binary.BigEndian.PutUint16(bytes[11:], horus.SeqNum)
+	binary.BigEndian.PutUint16(bytes[7:], horus.QLen)
+	binary.BigEndian.PutUint16(bytes[9:], horus.SeqNum)
 
 	length := len(b.Bytes())
 	if length < 50 {
@@ -124,18 +122,17 @@ func (horus *HorusPacket) SerializeTo(b gopacket.SerializeBuffer, opts gopacket.
 // but it should have the same arguments and return value
 // When the layer is registered we tell it to use this decode function
 func (horus *HorusPacket) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
-	if len(data) < 14 {
+	if len(data) < 12 {
 		return errors.New("horus_hdr packet too small")
 	}
 	horus.PktType = byte(data[0])
 	horus.ClusterID = binary.BigEndian.Uint16(data[1:3])
 	horus.SrcID = binary.BigEndian.Uint16(data[3:5])
 	horus.DstID = binary.BigEndian.Uint16(data[5:7])
-	horus.DstType = binary.BigEndian.Uint16(data[7:9])
-	horus.QLen = binary.BigEndian.Uint16(data[9:11])
-	horus.SeqNum = binary.BigEndian.Uint16(data[11:13])
+	horus.QLen = binary.BigEndian.Uint16(data[7:9])
+	horus.SeqNum = binary.BigEndian.Uint16(data[9:11])
 
-	horus.BaseLayer = layers.BaseLayer{Contents: data[:13], Payload: data[14:]}
+	horus.BaseLayer = layers.BaseLayer{Contents: data[:11], Payload: data[12:]}
 	return nil
 }
 
@@ -199,7 +196,6 @@ func TestHorusPkt(pkt_type byte,
 	cluster_id uint16,
 	src_id uint16,
 	dst_id uint16,
-	dst_type uint16,
 	seq_num uint16,
 	payload []byte) {
 
@@ -208,7 +204,6 @@ func TestHorusPkt(pkt_type byte,
 		ClusterID:  cluster_id,
 		SrcID:      src_id,
 		DstID:      dst_id,
-		DstType:    dst_type,
 		SeqNum:     seq_num,
 		RestOfData: payload,
 	}
@@ -225,7 +220,6 @@ func TestHorusPkt(pkt_type byte,
 			log.Println(horus.PktType)
 			log.Println(horus.SrcID)
 			log.Println(horus.DstID)
-			log.Println(horus.DstType)
 
 			newPktBytes := pkt.Data()
 			newPktBytes[14] = byte(PKT_TYPE_WORKER_ID)
