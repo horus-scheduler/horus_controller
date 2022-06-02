@@ -17,12 +17,9 @@ import (
 )
 
 type CentralRpcEndpoint struct {
-	appLAddr  string
+	vcLAddr   string
 	topoLAddr string
 
-	// appIngressEvents chan *horus_pb.MdcAppEvent
-	// torIngressEvents chan *horus_pb.MdcSyncEvent
-	// torEgressEvents  chan *horus_pb.MdcSessionUpdateEvent // to ToR
 	failedLeaves chan *LeafFailedMessage
 
 	topology      *model.Topology
@@ -32,13 +29,14 @@ type CentralRpcEndpoint struct {
 	doneChan chan bool
 }
 
-func NewCentralRpcEndpoint(topoLAddr string,
+func NewCentralRpcEndpoint(topoLAddr, vcLAddr string,
 	topology *model.Topology,
 	vcm *core.VCManager,
 ) *CentralRpcEndpoint {
 	connPool := make(map[uint16]*grpcpool.Pool)
 	return &CentralRpcEndpoint{
 		topoLAddr:     topoLAddr,
+		vcLAddr:       vcLAddr,
 		topology:      topology,
 		vcm:           vcm,
 		spineConnPool: connPool,
@@ -47,17 +45,17 @@ func NewCentralRpcEndpoint(topoLAddr string,
 	}
 }
 
-// func (s *CentralRpcEndpoint) createAppListener() error {
-// 	lis, err := net.Listen("tcp4", s.appLAddr)
-// 	if err != nil {
-// 		log.Println(err)
-// 		return err
-// 	}
-// 	rpcServer := grpc.NewServer()
-// 	appServer := NewAppServer(s.appIngressEvents)
-// 	horus_pb.RegisterMdcAppNotifierServer(rpcServer, appServer)
-// 	return rpcServer.Serve(lis)
-// }
+func (s *CentralRpcEndpoint) createVCListener() error {
+	lis, err := net.Listen("tcp4", s.vcLAddr)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	rpcServer := grpc.NewServer()
+	vcServer := NewCentralVCServer(s.vcm)
+	horus_pb.RegisterHorusVCServer(rpcServer, vcServer)
+	return rpcServer.Serve(lis)
+}
 
 func (s *CentralRpcEndpoint) createTopoListener() error {
 	lis, err := net.Listen("tcp4", s.topoLAddr)
@@ -132,6 +130,7 @@ func (s *CentralRpcEndpoint) Start() {
 
 	// creates the end point servers for both App and ToR
 	go s.createTopoListener()
+	go s.createVCListener()
 
 	// Let's send any outstanding events
 	go s.processEvents()

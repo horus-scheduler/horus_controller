@@ -44,7 +44,7 @@ func NewCentralController(opts ...CentralControllerOption) *centralController {
 		vcm.AddVC(vc)
 	}
 
-	rpcEndPoint := net.NewCentralRpcEndpoint(binCfg.TopoServer, topology, vcm)
+	rpcEndPoint := net.NewCentralRpcEndpoint(binCfg.TopoServer, binCfg.VCServer, topology, vcm)
 	bus := NewCentralBus(topology, vcm, NewCentralBusChan())
 
 	s := &centralController{

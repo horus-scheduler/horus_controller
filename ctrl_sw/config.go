@@ -16,10 +16,12 @@ type bfrtContext struct {
 
 type rootConfig struct {
 	bfrtContext
-	AsicIntf string
-	SpineIDs []uint16
-	LeafIDs  []uint16
-	Timeout  int64
+	AsicIntf   string
+	TopoServer string
+	VCServer   string
+	SpineIDs   []uint16
+	LeafIDs    []uint16
+	Timeout    int64
 }
 
 func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
@@ -50,6 +52,8 @@ func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
 	cfg.DeviceID = viper.GetUint32("asic.device_id")
 	cfg.PipeID = viper.GetUint32("asic.pipe_id")
 	cfg.BfrtAddress = viper.GetString("bfrt.address")
+	cfg.TopoServer = viper.GetString("centralized.address")
+	cfg.VCServer = viper.GetString("centralized.vcAddress")
 	cfg.Timeout = viper.GetInt64("controllers.timeout")
 	err = viper.UnmarshalKey("controllers.spines", &cfg.SpineIDs)
 	if err != nil {

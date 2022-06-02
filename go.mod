@@ -3,6 +3,7 @@ module github.com/khaledmdiab/horus_controller
 go 1.18
 
 require (
+	github.com/golang/protobuf v1.5.2
 	github.com/google/gopacket v1.1.19
 	github.com/khaledmdiab/bfrt-go-client v0.0.0-20220518191249-393f43aaba90
 	github.com/mdlayher/raw v0.1.0
@@ -17,7 +18,6 @@ require (
 require (
 	github.com/antoninbas/p4runtime-go-client v0.0.0-20220427185936-f5609a358ca5 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/mdlayher/packet v0.0.0-20220221164757-67998ac0ff93 // indirect

@@ -69,7 +69,7 @@ func NewLeafController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *le
 	// TODO: Leaf RPC end point
 	// rpcEndPoint := net.NewLeafRpcEndpoint(cfg.LocalRpcAddress, cfg.RemoteRpcAddress, rpcIngressChan, rpcEgressChan)
 
-	ch := NewLeafBusChan(hmEgress, nil, nil, asicIngress, asicEgress)
+	ch := NewLeafBusChan(hmEgress, asicIngress, asicEgress)
 	bus := NewLeafBus(ch, healthMgr, bfrt)
 	return &leafController{
 		// rpcEndPoint: nil,
@@ -136,6 +136,17 @@ func (c *leafController) Start() {
 	c.controller.Start()
 	go c.healthMgr.Start()
 	go c.bus.Start()
+}
+
+func (c *leafController) Shutdown() {
+	logrus.
+		WithFields(logrus.Fields{"ID": c.ID}).
+		Infof("Shutting down leaf switch controller")
+	c.bus.DoneChan <- true
+	c.healthMgr.DoneChan <- true
+	close(c.asicEgress)
+	close(c.asicIngress)
+	close(c.bus.hmMsg)
 }
 
 func (c *spineController) Start() {

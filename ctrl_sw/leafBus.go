@@ -8,7 +8,6 @@ import (
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 	"github.com/khaledmdiab/horus_controller/core"
 	horus_net "github.com/khaledmdiab/horus_controller/core/net"
-	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 )
 
@@ -19,8 +18,8 @@ type LeafBusChan struct {
 	// send-to healthManager
 
 	// gRPC channels
-	rpcIngress chan *horus_pb.HorusResponse // recv-from gRPC connection
-	rpcEgress  chan *horus_pb.HorusResponse // send-to gRPC client
+	// rpcIngress chan *horus_pb.HorusResponse // recv-from gRPC connection
+	// rpcEgress  chan *horus_pb.HorusResponse // send-to gRPC client
 
 	// ASIC channels
 	asicIngress chan []byte // recv-from the ASIC
@@ -29,14 +28,10 @@ type LeafBusChan struct {
 
 // NewLeafBusChan ...
 func NewLeafBusChan(hmIngressActiveNode chan *core.LeafHealthMsg,
-	rpcIngress chan *horus_pb.HorusResponse,
-	rpcEgress chan *horus_pb.HorusResponse,
 	asicIngress chan []byte,
 	asicEgress chan []byte) *LeafBusChan {
 	return &LeafBusChan{
 		hmMsg:       hmIngressActiveNode,
-		rpcIngress:  rpcIngress,
-		rpcEgress:   rpcEgress,
 		asicIngress: asicIngress,
 		asicEgress:  asicEgress,
 	}
@@ -47,7 +42,7 @@ type LeafBus struct {
 	*LeafBusChan
 	healthMgr *core.LeafHealthManager
 	bfrt      *bfrtC.Client // BfRt client
-	doneChan  chan bool
+	DoneChan  chan bool
 }
 
 // NewLeafBus ...
@@ -58,13 +53,20 @@ func NewLeafBus(busChan *LeafBusChan,
 		LeafBusChan: busChan,
 		healthMgr:   healthMgr,
 		bfrt:        bfrt,
-		doneChan:    make(chan bool, 1),
+		DoneChan:    make(chan bool, 1),
 	}
 }
 
 func (e *LeafBus) processIngress() {
+	stop := false
 	for {
+		if stop {
+			break
+		}
 		select {
+		case <-e.DoneChan:
+			logrus.Debug("Shutting down the leaf bus")
+			stop = true
 		// Message from the RPC endpoint
 		// case message := <-e.rpcIngress:
 		// 	go func() {
@@ -129,5 +131,4 @@ func (e *LeafBus) processIngress() {
 
 func (e *LeafBus) Start() {
 	go e.processIngress()
-	<-e.doneChan
 }

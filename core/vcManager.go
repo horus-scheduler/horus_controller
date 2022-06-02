@@ -109,6 +109,14 @@ func NewVCManager(topology *model.Topology) *VCManager {
 	}
 }
 
+func (vcm *VCManager) GetVCs() []*model.VirtualCluster {
+	var vcs []*model.VirtualCluster
+	for _, vc := range vcm.vcs.internal {
+		vcs = append(vcs, vc)
+	}
+	return vcs
+}
+
 // Does not (and shouldn't) modify the topology
 func (vcm *VCManager) AddVC(vc *model.VirtualCluster) {
 	// ClusterID -> *VirtualCluster

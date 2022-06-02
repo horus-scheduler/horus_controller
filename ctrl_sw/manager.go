@@ -1,6 +1,7 @@
 package ctrl_sw
 
 import (
+	"sync"
 	"time"
 
 	"github.com/khaledmdiab/horus_controller/core"
@@ -9,13 +10,8 @@ import (
 )
 
 type switchManager struct {
+	sync.RWMutex
 	status *core.CtrlStatus
-	// sessionMgr *core.SessionManager
-
-	// rpcEndPoint    *net.SwitchRpcEndpoint
-	// sequencer      *sequencer.SimpleEventSequencer
-	// syncJobs       chan *core.SyncJob
-	// syncJobResults chan *core.SyncJobResult
 
 	// A single end point per phy. switch to handles pkts to/from the ASIC
 	asicEndPoint *asicEndPoint
@@ -96,6 +92,25 @@ func (sc *switchManager) Run() {
 	for _, l := range sc.leaves {
 		go l.Start()
 	}
+
+	// Experimenting with shutting down a leaf
+	/*
+		go func() {
+			l := sc.leaves[0]
+			time.Sleep(time.Duration(10000) * time.Millisecond)
+			l.Shutdown()
+			logrus.Debug(">>> ", sc.asicEndPoint.leafIngress[0])
+			sc.Lock()
+			sc.leaves = sc.leaves[1:]
+			sc.Unlock()
+		}()
+		for {
+			time.Sleep(time.Duration(1000) * time.Millisecond)
+			sc.RLock()
+			logrus.Debug(len(sc.leaves))
+			sc.RUnlock()
+		}
+	*/
 
 	select {}
 }

@@ -10,7 +10,8 @@ title = "Horus switch controller"
 
 # used by spine and/or leaf switches
 [centralized]
-    address = "0.0.0.0:4401"
+    topoAddress = "0.0.0.0:4401"
+    vcAddress = "0.0.0.0:3301"
 
 # used by spine and leaf switches
 [bfrt]

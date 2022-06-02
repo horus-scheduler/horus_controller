@@ -9,18 +9,15 @@ import (
 type VirtualCluster struct {
 	sync.RWMutex
 	ClusterID uint16
-	Active    bool
-	Client    *Node
-	Spines    *NodeMap // nodeID -> *Node
-	Leaves    *NodeMap
-	Servers   *NodeMap
+	// Active    bool
+	// Client    *Node
+	Spines  *NodeMap // nodeID -> *Node
+	Leaves  *NodeMap
+	Servers *NodeMap
 }
 
 func NewVC(vcConfig *vcConfig, topology *Topology) *VirtualCluster {
-	s := &VirtualCluster{ClusterID: vcConfig.ID,
-		Active: true,
-		Client: nil, // TODO
-	}
+	s := &VirtualCluster{ClusterID: vcConfig.ID}
 	s.Servers = NewNodeMap()
 	s.Leaves = NewNodeMap()
 	s.Spines = NewNodeMap()
@@ -41,18 +38,6 @@ func NewVC(vcConfig *vcConfig, topology *Topology) *VirtualCluster {
 	}
 
 	return s
-}
-
-func (vc *VirtualCluster) Activate() {
-	vc.Lock()
-	defer vc.Unlock()
-	vc.Active = true
-}
-
-func (vc *VirtualCluster) Deactivate() {
-	vc.Lock()
-	defer vc.Unlock()
-	vc.Active = false
 }
 
 // Maybe?

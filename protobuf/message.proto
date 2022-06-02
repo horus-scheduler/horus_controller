@@ -2,8 +2,14 @@ syntax = "proto3";
 package horus.pb;
 option go_package = "./protobuf";
 
+import "google/protobuf/empty.proto";
+
 message HorusResponse {
     string status = 1;
+}
+
+message VCsResponse {
+    repeated VCInfo vcs = 1;
 }
 
 message VCInfo {
@@ -35,6 +41,7 @@ service HorusTopology {
 }
 
 service HorusVC {
+    rpc GetVCs(google.protobuf.Empty) returns (VCsResponse) {}
     rpc AddVC(VCInfo) returns (HorusResponse) {}
     rpc RemoveVC(VCInfo) returns (HorusResponse) {}
 }

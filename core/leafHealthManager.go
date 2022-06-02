@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/khaledmdiab/horus_controller/core/model"
+	"github.com/sirupsen/logrus"
 )
 
 // Tracks the health of its servers
@@ -15,7 +16,7 @@ type LeafHealthManager struct {
 	topology           *model.Topology
 	vcMgr              *VCManager
 	healthyNodeTimeOut time.Duration
-	doneChan           chan bool
+	DoneChan           chan bool
 }
 
 func NewLeafHealthManager(leafID uint16,
@@ -33,7 +34,7 @@ func NewLeafHealthManager(leafID uint16,
 		topology:           topology,
 		vcMgr:              vcMgr,
 		healthyNodeTimeOut: time.Duration(healthyNodeTimeOut) * time.Millisecond,
-		doneChan:           make(chan bool),
+		DoneChan:           make(chan bool),
 	}, nil
 }
 
@@ -54,9 +55,11 @@ func (hm *LeafHealthManager) processFailedNodes(nodes []*model.Node) {
 	for _, server := range updatedMap.Internal() {
 		updated = append(updated, server)
 	}
-	if len(updated) > 0 {
+	// if len(updated) > 0 {
+	if hm.leaf.ID == 0 {
 		hm.hmEgress <- NewLeafHealthMsg(true, updated)
 	}
+	// }
 }
 
 // Logic for receiving a ping pkt from a server
@@ -76,26 +79,37 @@ func (hm *LeafHealthManager) OnNodePingRecv(serverId, portId uint16) {
 }
 
 func (hm *LeafHealthManager) processNodes() {
+	stop := false
 	for {
-		var failedServers []*model.Node
-		hm.leaf.RLock()
-		for _, server := range hm.leaf.Children {
-			server.Lock()
-			elapsedTime := time.Since(server.LastPingTime)
-			if elapsedTime >= hm.healthyNodeTimeOut {
-				server.Healthy = false
-				server.Ready = false
-				failedServers = append(failedServers, server)
-			}
-			server.Unlock()
+		if stop {
+			break
 		}
-		hm.leaf.RUnlock()
-		hm.processFailedNodes(failedServers)
-		time.Sleep(2 * hm.healthyNodeTimeOut)
+		select {
+		case <-hm.DoneChan:
+			logrus.Debug("Shutting down the health manager")
+			stop = true
+		default:
+			var failedServers []*model.Node
+			hm.leaf.RLock()
+			for _, server := range hm.leaf.Children {
+				server.Lock()
+				elapsedTime := time.Since(server.LastPingTime)
+				if elapsedTime >= hm.healthyNodeTimeOut {
+					server.Healthy = false
+					server.Ready = false
+					failedServers = append(failedServers, server)
+				}
+				server.Unlock()
+			}
+			hm.leaf.RUnlock()
+			hm.processFailedNodes(failedServers)
+			time.Sleep(2 * hm.healthyNodeTimeOut)
+		}
 	}
 }
 
 func (hm *LeafHealthManager) Start() {
 	go hm.processNodes()
-	<-hm.doneChan
+	// <-hm.DoneChan
+	// logrus.Debug("Shutting down")
 }
