@@ -1,6 +1,8 @@
 package ctrl_sw
 
 import (
+	"time"
+
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
 	horus_net "github.com/khaledmdiab/horus_controller/core/net"
@@ -30,9 +32,9 @@ type leafController struct {
 	*controller
 
 	// Components
-	bus *LeafBus // Main leaf logic
-	// rpcEndPoint *house_net.LeafRpcEndpoint // RPC server (Horus messages)
-	healthMgr *core.LeafHealthManager // Tracking the health of downstream nodes
+	bus         *LeafBus                   // Main leaf logic
+	rpcEndPoint *horus_net.LeafRpcEndpoint // RPC server (Horus messages)
+	healthMgr   *core.LeafHealthManager    // Tracking the health of downstream nodes
 }
 
 // Spine-specific logic
@@ -45,15 +47,10 @@ type spineController struct {
 	healthMgr   *core.LeafHealthManager     // Tracking the health of downstream nodes
 }
 
-func NewLeafController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *leafController {
+func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig) *leafController {
 	topoCfg := model.ReadTopologyFile(topoFp)
-	vcsConf := model.ReadVCsFile(vcsFp)
 	topology := model.NewDCNTopology(topoCfg)
 	vcm := core.NewVCManager(topology)
-	for _, vcConf := range vcsConf.VCs {
-		vc := model.NewVC(vcConf, topology)
-		vcm.AddVC(vc)
-	}
 
 	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
 	asicIngress := make(chan []byte, horus_net.DefaultUnixSockRecvSize)
@@ -66,15 +63,15 @@ func NewLeafController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *le
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	// TODO: Leaf RPC end point
-	// rpcEndPoint := net.NewLeafRpcEndpoint(cfg.LocalRpcAddress, cfg.RemoteRpcAddress, rpcIngressChan, rpcEgressChan)
+
+	rpcEndPoint := horus_net.NewLeafRpcEndpoint(cfg.TopoServer, cfg.VCServer)
 
 	ch := NewLeafBusChan(hmEgress, asicIngress, asicEgress)
 	bus := NewLeafBus(ch, healthMgr, bfrt)
 	return &leafController{
-		// rpcEndPoint: nil,
-		healthMgr: healthMgr,
-		bus:       bus,
+		rpcEndPoint: rpcEndPoint,
+		healthMgr:   healthMgr,
+		bus:         bus,
 		controller: &controller{
 			ID:          ctrlID,
 			topology:    topology,
@@ -87,15 +84,10 @@ func NewLeafController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *le
 	}
 }
 
-func NewSpineController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *spineController {
+func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineController {
 	topoCfg := model.ReadTopologyFile(topoFp)
-	vcsConf := model.ReadVCsFile(vcsFp)
 	topology := model.NewDCNTopology(topoCfg)
 	vcm := core.NewVCManager(topology)
-	for _, vcConf := range vcsConf.VCs {
-		vc := model.NewVC(vcConf, topology)
-		vcm.AddVC(vc)
-	}
 
 	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
 	asicIngress := make(chan []byte, horus_net.DefaultUnixSockRecvSize)
@@ -106,7 +98,8 @@ func NewSpineController(ctrlID uint16, topoFp, vcsFp string, cfg *rootConfig) *s
 	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(spine.ID), target)
 
-	rpcEndPoint := horus_net.NewSpineRpcEndpoint(spine.Address, topology, vcm, failedLeaves)
+	rpcEndPoint := horus_net.NewSpineRpcEndpoint(spine.Address, cfg.VCServer,
+		topology, vcm, failedLeaves)
 	ch := NewSpineBusChan(activeNode, failedLeaves, asicIngress, asicEgress)
 	bus := NewSpineBus(ch, nil, bfrt)
 	return &spineController{
@@ -134,6 +127,19 @@ func (c *leafController) Start() {
 		WithFields(logrus.Fields{"ID": c.ID}).
 		Infof("Starting leaf switch controller")
 	c.controller.Start()
+
+	go c.rpcEndPoint.Start()
+	time.Sleep(time.Second)
+	vcs, err := c.rpcEndPoint.GetVCs()
+	if err != nil {
+		logrus.Error(err)
+	} else {
+		for _, vcConf := range vcs {
+			vc := model.NewVC(vcConf, c.topology)
+			c.vcm.AddVC(vc)
+		}
+	}
+
 	go c.healthMgr.Start()
 	go c.bus.Start()
 }
@@ -155,5 +161,16 @@ func (c *spineController) Start() {
 		Infof("Starting spine switch controller")
 	c.controller.Start()
 	go c.rpcEndPoint.Start()
+	time.Sleep(time.Second)
+	vcs, err := c.rpcEndPoint.GetVCs()
+	if err != nil {
+		logrus.Error(err)
+	} else {
+		for _, vcConf := range vcs {
+			vc := model.NewVC(vcConf, c.topology)
+			c.vcm.AddVC(vc)
+		}
+	}
+
 	go c.bus.Start()
 }

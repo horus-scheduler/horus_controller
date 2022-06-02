@@ -1,19 +1,19 @@
 [[vc]]
     id = 0
     spines = [0]
-        [[vc.server]]
+        [[vc.servers]]
             id = 0
-            workers = [0, 2, 3]
-        [[vc.server]]
+            workersIDs = [0, 2, 3]
+        [[vc.servers]]
             id = 4
-            workers = [8, 9, 10]
+            workersIDs = [8, 9, 10]
 
 [[vc]]
     id = 1
     spines = [0]
-        [[vc.server]]
+        [[vc.servers]]
             id = 1
-            workers = [8, 11]
-        [[vc.server]]
+            workersIDs = [8, 11]
+        [[vc.servers]]
             id = 2
-            workers = [23, 23]
+            workersIDs = [22, 23]

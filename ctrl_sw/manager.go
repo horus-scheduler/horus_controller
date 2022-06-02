@@ -31,7 +31,7 @@ func initLogger() {
 	})
 }
 
-func NewSwitchManager(topoFp, vcsFp, cfgFp string, opts ...SwitchManagerOption) *switchManager {
+func NewSwitchManager(topoFp, cfgFp string, opts ...SwitchManagerOption) *switchManager {
 	// Initialize program-related structures
 	initLogger()
 	net.InitHorusDefinitions()
@@ -46,11 +46,11 @@ func NewSwitchManager(topoFp, vcsFp, cfgFp string, opts ...SwitchManagerOption) 
 	var leaves []*leafController
 	var spines []*spineController
 	for _, ctrlID := range cfg.LeafIDs {
-		newCtrl := NewLeafController(ctrlID, topoFp, vcsFp, cfg)
+		newCtrl := NewLeafController(ctrlID, topoFp, cfg)
 		leaves = append(leaves, newCtrl)
 	}
 	for _, ctrlID := range cfg.SpineIDs {
-		newCtrl := NewSpineController(ctrlID, topoFp, vcsFp, cfg)
+		newCtrl := NewSpineController(ctrlID, topoFp, cfg)
 		spines = append(spines, newCtrl)
 	}
 

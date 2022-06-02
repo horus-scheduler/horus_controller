@@ -15,7 +15,12 @@ message VCsResponse {
 message VCInfo {
     uint32 id = 1;
     repeated uint32 spines = 2;
-    repeated ServerInfo servers = 3;
+    repeated VCServerInfo servers = 3;
+}
+
+message VCServerInfo {
+    uint32 id = 1;
+    repeated uint32 workersIDs = 2;
 }
 
 message LeafInfo {

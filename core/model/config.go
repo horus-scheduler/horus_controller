@@ -3,6 +3,7 @@ package model
 import (
 	"log"
 
+	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -41,18 +42,7 @@ type serverConfig struct {
 }
 
 type vcRootConfig struct {
-	VCs []*vcConfig
-}
-
-type vcConfig struct {
-	ID      uint16
-	Spines  []uint16
-	Servers []*vcServerConfig `mapstructure:"server"`
-}
-
-type vcServerConfig struct {
-	ID         uint16
-	WorkersIDs []uint16 `mapstructure:"workers"`
+	VCs []*horus_pb.VCInfo
 }
 
 func setCommonPaths(configName string, configPaths ...string) {
@@ -110,7 +100,6 @@ func ReadVCsFile(configName string, configPaths ...string) *vcRootConfig {
 		logrus.Fatalf("Fatal error config file: %s \n", err)
 	}
 	cfg := &vcRootConfig{}
-
 	err = viper.UnmarshalKey("vc", &cfg.VCs)
 	if err != nil {
 		logrus.Errorf("unable to decode into struct, %v", err)

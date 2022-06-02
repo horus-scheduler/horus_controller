@@ -8,13 +8,10 @@ import (
 )
 
 func main() {
-
 	var topoFp string
-	var vcsFp string
 	var cfgFp string
 
 	flag.StringVar(&topoFp, "topo", "", "Topology file path")
-	flag.StringVar(&vcsFp, "vcs", "", "Virtual clusters file path")
 	flag.StringVar(&cfgFp, "cfg", "", "Manager configuration file path")
 	flag.Parse()
 
@@ -22,14 +19,10 @@ func main() {
 		logrus.Fatal("Topology file path is required")
 	}
 
-	if vcsFp == "" {
-		logrus.Fatal("Virtual clusters file path is required")
-	}
-
 	if cfgFp == "" {
 		logrus.Warn("Manager configuration file path is empty")
 	}
 
-	cc := ctrl_sw.NewSwitchManager(topoFp, vcsFp, cfgFp)
+	cc := ctrl_sw.NewSwitchManager(topoFp, cfgFp)
 	cc.Run()
 }

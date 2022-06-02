@@ -23,12 +23,8 @@ func (v *centralVCServer) GetVCs(context.Context, *empty.Empty) (*horus_pb.VCsRe
 		vcInfo := &horus_pb.VCInfo{}
 		vcInfo.Id = uint32(vc.ClusterID)
 		for _, server := range vc.Servers.Internal() {
-			serverInfo := &horus_pb.ServerInfo{}
+			serverInfo := &horus_pb.VCServerInfo{}
 			serverInfo.Id = uint32(server.ID)
-			serverInfo.Address = server.Address
-			serverInfo.LeafID = uint32(server.Parent.ID)
-			serverInfo.PortId = uint32(server.PortId)
-			serverInfo.WorkersCount = uint32(server.LastWorkerID - server.FirstWorkerID + 1)
 			vcInfo.Servers = append(vcInfo.Servers, serverInfo)
 		}
 		for _, spine := range vc.Spines.Internal() {

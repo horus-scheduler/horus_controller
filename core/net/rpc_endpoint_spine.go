@@ -1,30 +1,39 @@
 package net
 
 import (
+	"context"
 	"log"
 	"net"
+	"sync"
+	"time"
 
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
+	grpcpool "github.com/processout/grpc-go-pool"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
 type SpineRpcEndpoint struct {
+	sync.RWMutex
 	topoLAddr    string
+	vcAddress    string
 	topology     *model.Topology
 	vcm          *core.VCManager
 	failedLeaves chan *LeafFailedMessage
-	// connPool *grpcpool.Pool
-	doneChan chan bool
+	vcConnPool   *grpcpool.Pool
+	doneChan     chan bool
 }
 
-func NewSpineRpcEndpoint(topoLAddr string,
+func NewSpineRpcEndpoint(topoLAddr, vcAddress string,
 	topology *model.Topology,
 	vcm *core.VCManager,
 	failedLeaves chan *LeafFailedMessage) *SpineRpcEndpoint {
 	return &SpineRpcEndpoint{
 		topoLAddr:    topoLAddr,
+		vcAddress:    vcAddress,
 		topology:     topology,
 		vcm:          vcm,
 		failedLeaves: failedLeaves,
@@ -44,20 +53,36 @@ func (s *SpineRpcEndpoint) createTopoListener() error {
 	return rpcServer.Serve(lis)
 }
 
-func (s *SpineRpcEndpoint) createConnPool() {
-	// var factory grpcpool.Factory
-	// factory = func() (*grpc.ClientConn, error) {
-	// 	conn, err := grpc.Dial(s.rAddress, grpc.WithInsecure())
-	// 	if err != nil {
-	// 		log.Println(err)
-	// 	}
-	// 	return conn, err
-	// }
-	// var err error
-	// s.connPool, err = grpcpool.New(factory, 10, 20, 5*time.Second)
-	// if err != nil {
-	// 	log.Println(err)
-	// }
+func (s *SpineRpcEndpoint) createVCConnPool() {
+	s.Lock()
+	defer s.Unlock()
+	var factory grpcpool.Factory
+	factory = func() (*grpc.ClientConn, error) {
+		conn, err := grpc.Dial(s.vcAddress, grpc.WithInsecure())
+		if err != nil {
+			logrus.Error(err)
+		}
+		return conn, err
+	}
+	var err error
+	s.vcConnPool, err = grpcpool.New(factory, 10, 20, 5*time.Second)
+	if err != nil {
+		logrus.Error(err)
+	}
+}
+
+func (s *SpineRpcEndpoint) GetVCs() ([]*horus_pb.VCInfo, error) {
+	s.RLock()
+	defer s.RUnlock()
+	conn, err := s.vcConnPool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
+		return nil, err
+	}
+	defer conn.Close()
+	client := horus_pb.NewHorusVCClient(conn.ClientConn)
+	resp, err := client.GetVCs(context.Background(), &empty.Empty{})
+	return resp.Vcs, err
 }
 
 func (s *SpineRpcEndpoint) processEvents() {
@@ -76,7 +101,7 @@ func (s *SpineRpcEndpoint) processEvents() {
 
 func (s *SpineRpcEndpoint) Start() {
 	// create a pool of gRPC connections. used to send SyncEvent messages
-	s.createConnPool()
+	s.createVCConnPool()
 
 	// creates the end point server. used to recv SessionUpdateEvent messages
 	go s.createTopoListener()

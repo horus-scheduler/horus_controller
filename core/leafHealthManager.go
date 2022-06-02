@@ -55,11 +55,9 @@ func (hm *LeafHealthManager) processFailedNodes(nodes []*model.Node) {
 	for _, server := range updatedMap.Internal() {
 		updated = append(updated, server)
 	}
-	// if len(updated) > 0 {
-	if hm.leaf.ID == 0 {
+	if len(updated) > 0 {
 		hm.hmEgress <- NewLeafHealthMsg(true, updated)
 	}
-	// }
 }
 
 // Logic for receiving a ping pkt from a server
@@ -110,6 +108,4 @@ func (hm *LeafHealthManager) processNodes() {
 
 func (hm *LeafHealthManager) Start() {
 	go hm.processNodes()
-	// <-hm.DoneChan
-	// logrus.Debug("Shutting down")
 }

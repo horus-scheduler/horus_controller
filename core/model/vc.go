@@ -3,6 +3,7 @@ package model
 import (
 	"sync"
 
+	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,21 +17,21 @@ type VirtualCluster struct {
 	Servers *NodeMap
 }
 
-func NewVC(vcConfig *vcConfig, topology *Topology) *VirtualCluster {
-	s := &VirtualCluster{ClusterID: vcConfig.ID}
+func NewVC(vcConfig *horus_pb.VCInfo, topology *Topology) *VirtualCluster {
+	s := &VirtualCluster{ClusterID: uint16(vcConfig.Id)}
 	s.Servers = NewNodeMap()
 	s.Leaves = NewNodeMap()
 	s.Spines = NewNodeMap()
 
 	for _, spineID := range vcConfig.Spines {
-		node := topology.GetNode(spineID, NodeType_Spine)
+		node := topology.GetNode(uint16(spineID), NodeType_Spine)
 		if node != nil {
 			s.Spines.Store(node.ID, node)
 		}
 	}
 
 	for _, serverConfig := range vcConfig.Servers {
-		node := topology.GetNode(serverConfig.ID, NodeType_Server)
+		node := topology.GetNode(uint16(serverConfig.Id), NodeType_Server)
 		if node != nil {
 			s.Servers.Store(node.ID, node)
 			s.Leaves.Store(node.Parent.ID, node.Parent)

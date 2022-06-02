@@ -8,6 +8,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	grpcpool "github.com/processout/grpc-go-pool"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -34,7 +35,14 @@ func getVCs(pool *grpcpool.Pool) {
 
 	client := horus_pb.NewHorusVCClient(conn.ClientConn)
 	resp, _ := client.GetVCs(context.Background(), &empty.Empty{})
-	log.Println(resp.Vcs)
+	for _, v := range resp.Vcs {
+		logrus.Info(v.Id)
+		logrus.Info(v.Spines)
+		for _, s := range v.Servers {
+			logrus.Info(s.Id)
+		}
+		logrus.Info()
+	}
 }
 
 func createTopoPool() *grpcpool.Pool {
