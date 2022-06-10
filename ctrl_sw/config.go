@@ -16,12 +16,13 @@ type bfrtContext struct {
 
 type rootConfig struct {
 	bfrtContext
-	AsicIntf   string
-	TopoServer string
-	VCServer   string
-	SpineIDs   []uint16
-	LeafIDs    []uint16
-	Timeout    int64
+	AsicIntf    string
+	TopoServer  string
+	VCServer    string
+	MgmtAddress string
+	SpineIDs    []uint16
+	LeafIDs     []uint16
+	Timeout     int64
 }
 
 func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
@@ -55,6 +56,7 @@ func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
 	cfg.TopoServer = viper.GetString("centralized.address")
 	cfg.VCServer = viper.GetString("centralized.vcAddress")
 	cfg.Timeout = viper.GetInt64("controllers.timeout")
+	cfg.MgmtAddress = viper.GetString("controllers.mgmtAddress")
 	err = viper.UnmarshalKey("controllers.spines", &cfg.SpineIDs)
 	if err != nil {
 		logrus.Errorf("unable to decode into struct, %v", err)

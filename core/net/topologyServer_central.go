@@ -9,12 +9,12 @@ import (
 )
 
 type LeafFailedMessage struct {
-	leaf *horus_pb.LeafInfo
-	dsts []*model.Node
+	Leaf *horus_pb.LeafInfo
+	Dsts []*model.Node
 }
 
 func NewLeafFailedMessage(leaf *horus_pb.LeafInfo, dsts []*model.Node) *LeafFailedMessage {
-	return &LeafFailedMessage{leaf: leaf, dsts: dsts}
+	return &LeafFailedMessage{Leaf: leaf, Dsts: dsts}
 }
 
 type centralTopologyServer struct {

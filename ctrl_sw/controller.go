@@ -129,11 +129,14 @@ func (c *leafController) Start() {
 	c.controller.Start()
 
 	go c.rpcEndPoint.Start()
+	logrus.Debug("LEAF")
 	time.Sleep(time.Second)
 	vcs, err := c.rpcEndPoint.GetVCs()
+	logrus.Debug("LEAF DONE")
 	if err != nil {
 		logrus.Error(err)
 	} else {
+		logrus.Debug("LEAF VCs count: ", len(vcs))
 		for _, vcConf := range vcs {
 			vc := model.NewVC(vcConf, c.topology)
 			c.vcm.AddVC(vc)
@@ -161,11 +164,14 @@ func (c *spineController) Start() {
 		Infof("Starting spine switch controller")
 	c.controller.Start()
 	go c.rpcEndPoint.Start()
+	logrus.Debug("SPINE")
 	time.Sleep(time.Second)
 	vcs, err := c.rpcEndPoint.GetVCs()
+	logrus.Debug("SPINE DONE")
 	if err != nil {
 		logrus.Error(err)
 	} else {
+		logrus.Debug("SPINE VCs count: ", len(vcs))
 		for _, vcConf := range vcs {
 			vc := model.NewVC(vcConf, c.topology)
 			c.vcm.AddVC(vc)

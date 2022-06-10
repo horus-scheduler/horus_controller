@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/khaledmdiab/horus_controller/core"
-	"github.com/khaledmdiab/horus_controller/core/net"
+	horus_net "github.com/khaledmdiab/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
 )
 
@@ -15,6 +15,9 @@ type switchManager struct {
 
 	// A single end point per phy. switch to handles pkts to/from the ASIC
 	asicEndPoint *asicEndPoint
+
+	rpcEndPoint *horus_net.ManagerRpcEndpoint
+	rpcIngress  chan *horus_net.LeafFailedMessage
 
 	leaves []*leafController
 	spines []*spineController
@@ -34,7 +37,7 @@ func initLogger() {
 func NewSwitchManager(topoFp, cfgFp string, opts ...SwitchManagerOption) *switchManager {
 	// Initialize program-related structures
 	initLogger()
-	net.InitHorusDefinitions()
+	horus_net.InitHorusDefinitions()
 
 	// Read configuration
 	cfg := ReadConfigFile(cfgFp)
@@ -55,13 +58,16 @@ func NewSwitchManager(topoFp, cfgFp string, opts ...SwitchManagerOption) *switch
 	}
 
 	// ASIC <-> CPU interface.
-	asicIngress := make(chan []byte, net.DefaultUnixSockSendSize)
-	asicEgress := make(chan []byte, net.DefaultUnixSockSendSize)
+	asicIngress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
+	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
+	rpcIngress := make(chan *horus_net.LeafFailedMessage, horus_net.DefaultUnixSockSendSize)
 	asicEndPoint := NewAsicEndPoint(cfg.AsicIntf, leaves, spines, asicIngress, asicEgress)
-
+	rpcEndPoint := horus_net.NewManagerRpcEndpoint(cfg.MgmtAddress, rpcIngress)
 	s := &switchManager{
 		status:       status,
 		asicEndPoint: asicEndPoint,
+		rpcEndPoint:  rpcEndPoint,
+		rpcIngress:   rpcIngress,
 		leaves:       leaves,
 		spines:       spines,
 	}
@@ -82,6 +88,8 @@ func (sc *switchManager) init(cfg *rootConfig) {
 func (sc *switchManager) Run() {
 	// ASIC connections
 	go sc.asicEndPoint.Start()
+	go sc.rpcEndPoint.Start()
+	time.Sleep(time.Second)
 
 	// Start Spine and Leaf controllers
 	for _, s := range sc.spines {
@@ -99,7 +107,6 @@ func (sc *switchManager) Run() {
 			l := sc.leaves[0]
 			time.Sleep(time.Duration(10000) * time.Millisecond)
 			l.Shutdown()
-			logrus.Debug(">>> ", sc.asicEndPoint.leafIngress[0])
 			sc.Lock()
 			sc.leaves = sc.leaves[1:]
 			sc.Unlock()
@@ -111,6 +118,29 @@ func (sc *switchManager) Run() {
 			sc.RUnlock()
 		}
 	*/
-
-	select {}
+	for {
+		select {
+		case failed := <-sc.rpcIngress:
+			logrus.Debugf("Manager: removing leaf %d", failed.Leaf.Id)
+			var removedLeaf *leafController = nil
+			removedLeafIdx := -1
+			for leafIdx, leaf := range sc.leaves {
+				if leaf.ID == uint16(failed.Leaf.Id) {
+					removedLeaf = leaf
+					removedLeafIdx = leafIdx
+				}
+			}
+			if removedLeafIdx > -1 {
+				removedLeaf.Shutdown()
+				time.Sleep(time.Second)
+				sc.Lock()
+				logrus.Debugf("Manager: leaves count = %d", len(sc.leaves))
+				sc.leaves = append(sc.leaves[:removedLeafIdx], sc.leaves[removedLeafIdx+1:]...)
+				logrus.Debugf("Manager: leaves count = %d", len(sc.leaves))
+				sc.Unlock()
+			}
+		default:
+			continue
+		}
+	}
 }

@@ -11,9 +11,6 @@ import (
 type binRootConfig struct {
 	TopoServer string
 	VCServer   string
-	// TorServer    string
-	// TorCount     int
-	// TorAddresses []string
 }
 
 type topoRootConfig struct {
@@ -29,9 +26,10 @@ type spineConfig struct {
 }
 
 type leafConfig struct {
-	ID        uint16
-	Address   string
-	ServerIDs []uint16 `mapstructure:"servers"`
+	ID          uint16
+	Address     string
+	MgmtAddress string   `mapstructure:"mgmtAddress"`
+	ServerIDs   []uint16 `mapstructure:"servers"`
 }
 
 type serverConfig struct {

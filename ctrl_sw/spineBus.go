@@ -61,8 +61,8 @@ func (bus *SpineBus) processIngress() {
 			// TODO: receives a msg that a leaf had failed
 			// Notice: At this stage, the failed leaf has already been removed and detached
 			go func() {
-				logrus.Debug(message)
-				logrus.Debug("Using BfRt Client")
+				logrus.Debugf("Using BfRt Client to remove spine DP info about leaf %d",
+					message.Leaf.Id)
 			}()
 
 		default:

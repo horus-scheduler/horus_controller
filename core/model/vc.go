@@ -55,7 +55,7 @@ func NewVC(vcConfig *horus_pb.VCInfo, topology *Topology) *VirtualCluster {
 // bool: the server is detached
 // bool: a leaf is detached
 func (vc *VirtualCluster) DetachServer(serverID uint16) (bool, bool) {
-	leafDetached := false
+	detachLeaf := false
 	if server, ok := vc.Servers.Load(serverID); ok {
 		leaf := server.Parent
 		leafHasOtherChild := false
@@ -67,14 +67,13 @@ func (vc *VirtualCluster) DetachServer(serverID uint16) (bool, bool) {
 				}
 			}
 		}
-		if !leafHasOtherChild {
-			vc.Leaves.Delete(leaf.ID)
-			leafDetached = true
-		}
+		// vc.Leaves.Delete(leaf.ID)
+		detachLeaf = !leafHasOtherChild
+
 		vc.Servers.Delete(serverID)
-		return true, leafDetached
+		return true, detachLeaf
 	}
-	return false, leafDetached
+	return false, detachLeaf
 }
 
 // Detach a leaf from the VC, and automatically detach all servers.
@@ -86,14 +85,18 @@ func (vc *VirtualCluster) DetachLeaf(leafID uint16) (bool, []*Node) {
 	isDetached := false
 	var detachedServers []*Node
 	if leaf, ok := vc.Leaves.Load(leafID); ok {
+		detachLeaf := false
 		for _, server := range leaf.Children {
 			logrus.Debug("Removing server: ", server.ID)
-			serverDetached, leafDetach := vc.DetachServer(server.ID)
+			serverDetached, detachLeaf := vc.DetachServer(server.ID)
 			if serverDetached {
 				detachedServers = append(detachedServers, server)
 			}
 			logrus.Debug("Removed?: ", serverDetached)
-			isDetached = isDetached || leafDetach
+			isDetached = isDetached || detachLeaf
+		}
+		if detachLeaf {
+			vc.Leaves.Delete(leaf.ID)
 		}
 	}
 	logrus.Debug("LEAF REMOVED: ", isDetached)
@@ -102,16 +105,16 @@ func (vc *VirtualCluster) DetachLeaf(leafID uint16) (bool, []*Node) {
 
 func (vc *VirtualCluster) Debug() {
 	logrus.Debug("- VC ID: ", vc.ClusterID)
-	logrus.Debug("-- Spines Count=", len(vc.Spines.internal))
-	for _, spine := range vc.Spines.internal {
+	logrus.Debug("-- Spines Count=", len(vc.Spines.Internal()))
+	for _, spine := range vc.Spines.Internal() {
 		logrus.Debug("-- Spine: ", spine.ID)
 	}
-	logrus.Debug("-- Leaves Count=", len(vc.Leaves.internal))
-	for _, leaf := range vc.Leaves.internal {
+	logrus.Debug("-- Leaves Count=", len(vc.Leaves.Internal()))
+	for _, leaf := range vc.Leaves.Internal() {
 		logrus.Debug("-- Leaf: ", leaf.ID, ", First WID: ", leaf.FirstWorkerID, ", Last WID: ", leaf.LastWorkerID)
 	}
-	logrus.Debug("--Servers Count=", len(vc.Servers.internal))
-	for _, server := range vc.Servers.internal {
+	logrus.Debug("--Servers Count=", len(vc.Servers.Internal()))
+	for _, server := range vc.Servers.Internal() {
 		logrus.Debug("-- Server: ", server.ID, ", First WID: ", server.FirstWorkerID, ", Last WID: ", server.LastWorkerID)
 	}
 }

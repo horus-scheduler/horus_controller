@@ -47,7 +47,7 @@ func getVCs(pool *grpcpool.Pool) {
 
 func createTopoPool() *grpcpool.Pool {
 	topoFactory := func() (*grpc.ClientConn, error) {
-		conn, err := grpc.Dial("0.0.0.0:4401", grpc.WithInsecure())
+		conn, err := grpc.Dial("0.0.0.0:4001", grpc.WithInsecure())
 		if err != nil {
 			log.Println(err)
 		}
@@ -64,7 +64,7 @@ func createTopoPool() *grpcpool.Pool {
 
 func createVCPool() *grpcpool.Pool {
 	vcFactory := func() (*grpc.ClientConn, error) {
-		conn, err := grpc.Dial("0.0.0.0:3301", grpc.WithInsecure())
+		conn, err := grpc.Dial("0.0.0.0:4101", grpc.WithInsecure())
 		if err != nil {
 			log.Println(err)
 		}
@@ -78,9 +78,10 @@ func createVCPool() *grpcpool.Pool {
 }
 
 func main() {
-	// topoPool := createTopoPool()
-	// failLeaf(topoPool, 0)
 
-	vcPool := createVCPool()
-	getVCs(vcPool)
+	topoPool := createTopoPool()
+	failLeaf(topoPool, 1)
+
+	// vcPool := createVCPool()
+	// getVCs(vcPool)
 }

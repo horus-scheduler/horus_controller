@@ -4,6 +4,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/khaledmdiab/horus_controller/core"
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
+	"github.com/sirupsen/logrus"
 	context "golang.org/x/net/context"
 )
 
@@ -17,6 +18,7 @@ func NewCentralVCServer(vcm *core.VCManager) *centralVCServer {
 }
 
 func (v *centralVCServer) GetVCs(context.Context, *empty.Empty) (*horus_pb.VCsResponse, error) {
+	logrus.Debug("GetVCs() @Central")
 	vcs := v.vcm.GetVCs()
 	rsp := &horus_pb.VCsResponse{}
 	for _, vc := range vcs {

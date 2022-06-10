@@ -16,12 +16,13 @@ const (
 
 type Node struct {
 	sync.RWMutex
-	Address  string
-	ID       uint16
-	PortId   uint16 // valid if Type == server
-	Type     NodeType
-	Parent   *Node
-	Children []*Node
+	Address     string
+	MgmtAddress string
+	ID          uint16
+	PortId      uint16 // valid if Type == server
+	Type        NodeType
+	Parent      *Node
+	Children    []*Node
 
 	FirstWorkerID uint16 // valid if Type == leaf | server
 	LastWorkerID  uint16 // valid if Type == leaf | server
@@ -31,13 +32,14 @@ type Node struct {
 	Ready        bool
 }
 
-func NewNode(address string, id, portId uint16, nodeType NodeType) *Node {
+func NewNode(address, mgmtAddress string, id, portId uint16, nodeType NodeType) *Node {
 	return &Node{Address: address,
-		ID:       id,
-		PortId:   portId,
-		Type:     nodeType,
-		Parent:   nil,
-		Children: make([]*Node, 0),
+		MgmtAddress: mgmtAddress,
+		ID:          id,
+		PortId:      portId,
+		Type:        nodeType,
+		Parent:      nil,
+		Children:    make([]*Node, 0),
 	}
 }
 
@@ -53,8 +55,8 @@ func NewNodeMap() *NodeMap {
 }
 
 func (rm *NodeMap) Internal() map[uint16]*Node {
-	rm.RLock()
-	defer rm.RUnlock()
+	rm.Lock()
+	defer rm.Unlock()
 	return rm.internal
 }
 

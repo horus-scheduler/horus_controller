@@ -20,6 +20,12 @@ func newVCMap() *vcMap {
 	}
 }
 
+func (rm *vcMap) Internal() map[uint16]*model.VirtualCluster {
+	rm.Lock()
+	defer rm.Unlock()
+	return rm.internal
+}
+
 func (rm *vcMap) Load(key uint16) (value *model.VirtualCluster, ok bool) {
 	rm.RLock()
 	result, ok := rm.internal[key]
@@ -110,8 +116,10 @@ func NewVCManager(topology *model.Topology) *VCManager {
 }
 
 func (vcm *VCManager) GetVCs() []*model.VirtualCluster {
+	// vcm.vcs.RLock()
+	// defer vcm.vcs.RUnlock()
 	var vcs []*model.VirtualCluster
-	for _, vc := range vcm.vcs.internal {
+	for _, vc := range vcm.vcs.Internal() {
 		vcs = append(vcs, vc)
 	}
 	return vcs
@@ -181,6 +189,7 @@ func (vcm *VCManager) DetachServer(serverID uint16) bool {
 // Detaches a leaf from the VC Manager, and from every VC in the system
 func (vcm *VCManager) DetachLeaf(leafID uint16) bool {
 	vcs, found := vcm.GetVCsOfLeaf(leafID)
+	logrus.Debug("[VC Mgr] leaf "+strconv.Itoa(int(leafID))+" found? ", found)
 	detached := true
 	if found {
 		// For each VC: detach the leaf and servers

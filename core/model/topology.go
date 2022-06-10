@@ -25,12 +25,12 @@ func NewDCNTopology(topoCfg *topoRootConfig) *Topology {
 		Cores:   NewNodeMap(),
 	}
 
-	s.Root = NewNode("", 0, 0, NodeType_Core)
+	s.Root = NewNode("", "", 0, 0, NodeType_Core)
 	s.Root.Parent = nil
 	s.Cores.Store(s.Root.ID, s.Root)
 
 	for _, spineConf := range topoCfg.Spines {
-		spine := NewNode(spineConf.Address, spineConf.ID, 0, NodeType_Spine)
+		spine := NewNode(spineConf.Address, "", spineConf.ID, 0, NodeType_Spine)
 		spine.Parent = s.Root
 		s.Root.Children = append(s.Root.Children, spine)
 		s.Spines.Store(spine.ID, spine)
@@ -39,13 +39,13 @@ func NewDCNTopology(topoCfg *topoRootConfig) *Topology {
 			// workerIDs are local per leaf
 			var workerID uint16 = 0
 			leafConf := topoCfg.Leaves[leafID]
-			leaf := NewNode(leafConf.Address, leafConf.ID, 0, NodeType_Leaf)
+			leaf := NewNode(leafConf.Address, leafConf.MgmtAddress, leafConf.ID, 0, NodeType_Leaf)
 			leaf.Parent = spine
 			spine.Children = append(spine.Children, leaf)
 			leaf.FirstWorkerID = workerID
 			for _, serverID := range leafConf.ServerIDs {
 				serverConf := topoCfg.Servers[serverID]
-				server := NewNode(serverConf.Address, serverConf.ID, serverConf.PortID, NodeType_Server)
+				server := NewNode(serverConf.Address, "", serverConf.ID, serverConf.PortID, NodeType_Server)
 				server.Parent = leaf
 				leaf.Children = append(leaf.Children, server)
 				// Set worker IDs per Server
@@ -104,8 +104,10 @@ func (s *Topology) AddServerToLeaf(srvConfig *serverConfig, leafID uint16) (*Nod
 	if leaf == nil {
 		return nil, errors.New("Leaf " + strconv.Itoa(int(leafID)) + " doesn't exist!")
 	}
+	leaf.Lock()
+	defer leaf.Unlock()
 
-	server := NewNode(srvConfig.Address, srvConfig.ID, srvConfig.PortID, NodeType_Server)
+	server := NewNode(srvConfig.Address, "", srvConfig.ID, srvConfig.PortID, NodeType_Server)
 	server.Parent = leaf
 	leaf.Children = append(leaf.Children, server)
 	workerID := leaf.LastWorkerID + 1
@@ -144,6 +146,8 @@ func (s *Topology) RemoveServer(serverID uint16) []*Node {
 			removedIdx = sIdx
 		}
 	}
+	// leaf.Lock()
+	// defer leaf.Unlock()
 	leaf.FirstWorkerID = 0
 	if workerID == 0 {
 		leaf.LastWorkerID = 0

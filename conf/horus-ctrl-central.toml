@@ -4,7 +4,6 @@ title = "Horus centralizer controller"
 
 [rpc]
   [rpc.servers]
-      # communicating with switches via gRPC
-      topoAddress = "0.0.0.0:4401"
-      vcAddress = "0.0.0.0:3301"
-
+      # communicating with switch controllers via gRPC
+      topoAddress = "0.0.0.0:4001"
+      vcAddress = "0.0.0.0:4101"

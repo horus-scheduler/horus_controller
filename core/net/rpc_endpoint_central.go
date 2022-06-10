@@ -107,8 +107,8 @@ func (s *CentralRpcEndpoint) processEvents() {
 	for {
 		select {
 		case failedLeaf := <-s.failedLeaves:
-			for _, dst := range failedLeaf.dsts {
-				err := s.sendFailedLeafEvent(failedLeaf.leaf, dst)
+			for _, dst := range failedLeaf.Dsts {
+				err := s.sendFailedLeafEvent(failedLeaf.Leaf, dst)
 				if err != nil {
 					log.Println(err)
 				}
