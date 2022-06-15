@@ -1,20 +1,20 @@
 
 TARGET_CC=horus-central-ctrl
-TARGET_SW=horus-switch-ctrl
+TARGET_MGR=horus-switch-mgr
 PKG_NAME=github.com/khaledmdiab/horus_controller
-EXEC_PKGS = centralized switch
+EXEC_PKGS = centralized manager
 CORE_PKGS = $(sort $(dir $(wildcard core/*/)))
 FMT := $(shell go fmt)
 MODULES := $(shell go mod tidy)
 
-all: clean modules fmt proto build
+all: clean modules fmt proto build dummy_client
 
 build:
 	@echo ""
 	@echo "- Building..."
 	mkdir -p bin
 	go build -o bin/${TARGET_CC} -race -v cmd/centralized/main.go
-	go build -o bin/${TARGET_SW} -race -v cmd/switch/main.go
+	go build -o bin/${TARGET_MGR} -race -v cmd/manager/main.go
 
 modules:
 	@echo "-- Output of go mod modules:"
@@ -47,4 +47,4 @@ clean_proto:
 
 clean: clean_proto
 	rm -rf bin/${TARGET_CC}
-	rm -rf bin/${TARGET_SW}
+	rm -rf bin/${TARGET_MGR}

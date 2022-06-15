@@ -86,8 +86,9 @@ func (e *LeafBus) processIngress() {
 			logrus.Debug("[LeafBus] Shutting down the leaf bus")
 			stop = true
 		// Message about a new added server from the RPC
-		case <-e.newServersRPC:
+		case message := <-e.newServersRPC:
 			go func() {
+				logrus.Debugf("[LeafBus] Sending update pkt to server %d", message.Server.Id)
 				e.topology.Debug()
 			}()
 

@@ -130,7 +130,11 @@ func main() {
 	// logrus.Info("Failing leaf 0")
 	// failLeaf(topoPool, 0)
 
+	// This one should succeed
 	addServer(topoPool, 9, 1, 8, "", 0)
+	// This one should fail
+	addServer(topoPool, 10, 1, 8, "", 5)
+
 	// vcPool := createVCPool()
 	// getVCs(vcPool)
 }
