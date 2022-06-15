@@ -47,7 +47,7 @@ func (hm *LeafHealthManager) processFailedNodes(nodes []*model.Node) {
 		// Remove the server from *all* VCs
 		hm.vcMgr.DetachServer(server.ID)
 		// Remove the server from the topology
-		us := hm.topology.RemoveServer(server.ID)
+		_, us := hm.topology.RemoveServer(server.ID)
 		for _, s := range us {
 			updatedMap.Store(s.ID, s)
 		}
@@ -84,18 +84,23 @@ func (hm *LeafHealthManager) processNodes() {
 		}
 		select {
 		case <-hm.DoneChan:
-			logrus.Debug("Shutting down the health manager")
+			logrus.Debug("[LeafHealthMgr] Shutting down the health manager")
 			stop = true
 		default:
 			var failedServers []*model.Node
 			hm.leaf.RLock()
 			for _, server := range hm.leaf.Children {
 				server.Lock()
+				if hm.leaf.ID == 0 {
+					logrus.Tracef("[LeafHealthMgr] Server %d, Leaf %d", server.ID, hm.leaf.ID)
+				}
 				elapsedTime := time.Since(server.LastPingTime)
 				if elapsedTime >= hm.healthyNodeTimeOut {
-					server.Healthy = false
-					server.Ready = false
-					failedServers = append(failedServers, server)
+					if server.Healthy && server.Ready {
+						failedServers = append(failedServers, server)
+						server.Healthy = false
+						server.Ready = false
+					}
 				}
 				server.Unlock()
 			}

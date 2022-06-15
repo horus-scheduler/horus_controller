@@ -132,7 +132,9 @@ func (vcm *VCManager) AddVC(vc *model.VirtualCluster) {
 
 	// ServerID -> []*VirtualCluster
 	for _, s := range vc.Servers.Internal() {
+		s.Lock()
 		vcm.serverVCs.AppendToVCList(s.ID, vc)
+		s.Unlock()
 	}
 
 	// LeafID -> []*VirtualCluster
@@ -171,18 +173,29 @@ func (vcm *VCManager) GetVCsOfLeaf(leafID uint16) ([]*model.VirtualCluster, bool
 // Detaches a server from the VC Manager, and from every VC in the system
 func (vcm *VCManager) DetachServer(serverID uint16) bool {
 	vcs, found := vcm.GetVCsOfServer(serverID)
+	logrus.Debugf("[VC Mgr] Detaching server %d, found? %t", serverID, found)
+	logrus.Debugf("[VC Mgr] VCs count %d", len(vcs))
 	detached := false
+	firstDetach := false
 	if found {
 		for _, vc := range vcs {
 			serverDetached, leafDetached := vc.DetachServer(serverID)
-			detached = detached && serverDetached
-			if leafDetached {
-				server := vcm.topology.GetNode(serverID, model.NodeType_Server)
+			if !firstDetach {
+				detached = serverDetached
+				firstDetach = true
+			} else {
+				detached = detached && serverDetached
+			}
+			server := vcm.topology.GetNode(serverID, model.NodeType_Server)
+			if leafDetached && server.Parent != nil {
+				logrus.Debugf("[VC Mgr] Removing VC %d from leaf %d after detaching server %d", vc.ClusterID, server.Parent.ID, serverID)
 				vcm.leafVCs.RemoveFromVCList(server.Parent.ID, vc)
 			}
 		}
 	}
 	vcm.serverVCs.DeleteVCList(serverID)
+	logrus.Debugf("[VC Mgr] server %d, detached? %t", serverID, detached)
+
 	return found && detached
 }
 

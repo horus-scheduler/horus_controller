@@ -2,10 +2,13 @@ package net
 
 import (
 	"context"
+	"net"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/khaledmdiab/horus_controller/core"
+	"github.com/khaledmdiab/horus_controller/core/model"
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	grpcpool "github.com/processout/grpc-go-pool"
 	"github.com/sirupsen/logrus"
@@ -14,32 +17,49 @@ import (
 
 type LeafRpcEndpoint struct {
 	sync.RWMutex
-	topoAddress string
-	vcAddress   string
+	TopoAddress  string
+	VCAddress    string
+	LocalAddress string
+
+	topology *model.Topology
+	vcm      *core.VCManager
+
+	updatedServersEgExt chan *core.LeafHealthMsg
+	newServersEgExt     chan *ServerAddedMessage
 
 	vcConnPool *grpcpool.Pool
 	doneChan   chan bool
 }
 
-func NewLeafRpcEndpoint(topoAddress, vcAddress string) *LeafRpcEndpoint {
+func NewLeafRpcEndpoint(topoAddress, vcAddress, localAddress string,
+	topology *model.Topology,
+	vcm *core.VCManager,
+	updatedServers chan *core.LeafHealthMsg,
+	newServers chan *ServerAddedMessage,
+) *LeafRpcEndpoint {
 	return &LeafRpcEndpoint{
-		topoAddress: topoAddress,
-		vcAddress:   vcAddress,
-		doneChan:    make(chan bool, 1),
+		TopoAddress:         topoAddress,
+		VCAddress:           vcAddress,
+		LocalAddress:        localAddress,
+		topology:            topology,
+		vcm:                 vcm,
+		updatedServersEgExt: updatedServers,
+		newServersEgExt:     newServers,
+		doneChan:            make(chan bool, 1),
 	}
 }
 
-func (s *LeafRpcEndpoint) createListener() {
-	// lis, err := net.Listen("tcp4", s.lAddress)
-	// if err != nil {
-	// 	log.Println(err)
-	// }
-	// rpcServer := grpc.NewServer()
-	// updater := NewUpdateServer(s.)
-	// horus_pb.RegisterMdcSessionUpdaterServer(rpcServer, updater)
-	// if err := rpcServer.Serve(lis); err != nil {
-	// 	log.Println("Failed to start Hello Server", err)
-	// }
+func (s *LeafRpcEndpoint) createTopoListener() error {
+	lis, err := net.Listen("tcp4", s.LocalAddress)
+	if err != nil {
+		logrus.Warn(err)
+		return err
+	}
+	logrus.Infof("[LeafRPC] Creating topologyServer at %s", s.LocalAddress)
+	rpcServer := grpc.NewServer()
+	topoServer := NewLeafTopologyServer(s.topology, s.vcm, s.updatedServersEgExt, s.newServersEgExt)
+	horus_pb.RegisterHorusTopologyServer(rpcServer, topoServer)
+	return rpcServer.Serve(lis)
 }
 
 func (s *LeafRpcEndpoint) createVCConnPool() {
@@ -47,7 +67,7 @@ func (s *LeafRpcEndpoint) createVCConnPool() {
 	defer s.Unlock()
 	var factory grpcpool.Factory
 	factory = func() (*grpc.ClientConn, error) {
-		conn, err := grpc.Dial(s.vcAddress, grpc.WithInsecure())
+		conn, err := grpc.Dial(s.VCAddress, grpc.WithInsecure())
 		if err != nil {
 			logrus.Error(err)
 		}
@@ -77,11 +97,6 @@ func (s *LeafRpcEndpoint) GetVCs() ([]*horus_pb.VCInfo, error) {
 func (s *LeafRpcEndpoint) processEvents() {
 	// for {
 	// 	select {
-	// 	case syncEv := <-s.syncEvents:
-	// 		err := s.sendSyncEvent(syncEv)
-	// 		if err != nil {
-	// 			log.Println(err)
-	// 		}
 	// 	default:
 	// 		continue
 	// 	}
@@ -93,7 +108,7 @@ func (s *LeafRpcEndpoint) Start() {
 	s.createVCConnPool()
 
 	// creates the end point server. used to recv SessionUpdateEvent messages
-	go s.createListener()
+	go s.createTopoListener()
 
 	// Let's send any outstanding events
 	go s.processEvents()

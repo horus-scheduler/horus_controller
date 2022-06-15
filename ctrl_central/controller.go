@@ -17,8 +17,13 @@ type centralController struct {
 
 type CentralControllerOption func(*centralController)
 
-func initLogger() {
-	logrus.SetLevel(logrus.DebugLevel)
+func initLogger(cfg *model.BinRootConfig) {
+	if lvl, err := logrus.ParseLevel(cfg.LogLevel); err == nil {
+		logrus.SetLevel(lvl)
+	} else {
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+
 	logrus.SetFormatter(&logrus.TextFormatter{
 		DisableLevelTruncation: true,
 		FullTimestamp:          false,
@@ -27,16 +32,15 @@ func initLogger() {
 }
 
 func NewCentralController(opts ...CentralControllerOption) *centralController {
-	initLogger()
-
+	logrus.SetLevel(logrus.TraceLevel)
 	status := core.NewCtrlStatus()
 	binCfg := model.ReadConfigFile("")
 	topoCfg := model.ReadTopologyFile("")
 	vcsConf := model.ReadVCsFile("")
-	// logrus.Info(binCfg)
-	// logrus.Info(topoCfg)
-	// logrus.Info(vcsConf)
 
+	initLogger(binCfg)
+
+	logrus.Debug("[Central] Initializing Topology and VC Manager...")
 	topology := model.NewDCNTopology(topoCfg)
 	vcm := core.NewVCManager(topology)
 	for _, vcConf := range vcsConf.VCs {
@@ -44,7 +48,7 @@ func NewCentralController(opts ...CentralControllerOption) *centralController {
 		vcm.AddVC(vc)
 	}
 
-	logrus.Debug("CREATED")
+	logrus.Debug("[Central] Topology and VC Manager are initialized")
 
 	rpcEndPoint := net.NewCentralRpcEndpoint(binCfg.TopoServer, binCfg.VCServer, topology, vcm)
 	bus := NewCentralBus(topology, vcm, NewCentralBusChan())

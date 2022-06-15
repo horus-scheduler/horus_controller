@@ -2,6 +2,10 @@
 
 title = "Horus centralizer controller"
 
+# Available options: trace, debug, info, warn, error, fatal, panic
+[log]
+level = "debug"
+
 [rpc]
   [rpc.servers]
       # communicating with switch controllers via gRPC

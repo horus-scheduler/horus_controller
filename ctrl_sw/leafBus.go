@@ -7,19 +7,16 @@ import (
 	"github.com/google/gopacket/layers"
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 	"github.com/khaledmdiab/horus_controller/core"
+	"github.com/khaledmdiab/horus_controller/core/model"
 	horus_net "github.com/khaledmdiab/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
 )
 
 // LeafBusChan ...
 type LeafBusChan struct {
-	// healthManager channels
-	hmMsg chan *core.LeafHealthMsg // recv-from healthManager
-	// send-to healthManager
-
-	// gRPC channels
-	// rpcIngress chan *horus_pb.HorusResponse // recv-from gRPC connection
-	// rpcEgress  chan *horus_pb.HorusResponse // send-to gRPC client
+	hmMsg             chan *core.LeafHealthMsg           // recv-from healthManager
+	updatedServersRPC chan *core.LeafHealthMsg           // recv-from RPC endpoint
+	newServersRPC     chan *horus_net.ServerAddedMessage // recv-from RPC endpoint
 
 	// ASIC channels
 	asicIngress chan []byte // recv-from the ASIC
@@ -28,12 +25,16 @@ type LeafBusChan struct {
 
 // NewLeafBusChan ...
 func NewLeafBusChan(hmIngressActiveNode chan *core.LeafHealthMsg,
+	updatedServersRPC chan *core.LeafHealthMsg,
+	newServersRPC chan *horus_net.ServerAddedMessage,
 	asicIngress chan []byte,
 	asicEgress chan []byte) *LeafBusChan {
 	return &LeafBusChan{
-		hmMsg:       hmIngressActiveNode,
-		asicIngress: asicIngress,
-		asicEgress:  asicEgress,
+		hmMsg:             hmIngressActiveNode,
+		updatedServersRPC: updatedServersRPC,
+		newServersRPC:     newServersRPC,
+		asicIngress:       asicIngress,
+		asicEgress:        asicEgress,
 	}
 }
 
@@ -41,6 +42,7 @@ func NewLeafBusChan(hmIngressActiveNode chan *core.LeafHealthMsg,
 type LeafBus struct {
 	*LeafBusChan
 	healthMgr *core.LeafHealthManager
+	topology  *model.Topology
 	bfrt      *bfrtC.Client // BfRt client
 	DoneChan  chan bool
 }
@@ -48,16 +50,32 @@ type LeafBus struct {
 // NewLeafBus ...
 func NewLeafBus(busChan *LeafBusChan,
 	healthMgr *core.LeafHealthManager,
+	topology *model.Topology,
 	bfrt *bfrtC.Client) *LeafBus {
 	return &LeafBus{
 		LeafBusChan: busChan,
 		healthMgr:   healthMgr,
+		topology:    topology,
 		bfrt:        bfrt,
 		DoneChan:    make(chan bool, 1),
 	}
 }
 
 func (e *LeafBus) processIngress() {
+	agg := make(chan *core.LeafHealthMsg)
+	go func(c chan *core.LeafHealthMsg) {
+		for msg := range c {
+			logrus.Debug("[LeafBus] Received updated servers from health manager")
+			agg <- msg
+		}
+	}(e.hmMsg)
+	go func(c chan *core.LeafHealthMsg) {
+		for msg := range c {
+			logrus.Debug("[LeafBus] Received updated servers from RPC")
+			agg <- msg
+		}
+	}(e.updatedServersRPC)
+
 	stop := false
 	for {
 		if stop {
@@ -65,22 +83,22 @@ func (e *LeafBus) processIngress() {
 		}
 		select {
 		case <-e.DoneChan:
-			logrus.Debug("Shutting down the leaf bus")
+			logrus.Debug("[LeafBus] Shutting down the leaf bus")
 			stop = true
-		// Message from the RPC endpoint
-		// case message := <-e.rpcIngress:
-		// 	go func() {
-		// 		logrus.Debug(message)
-		// 	}()
-
-		// Message from the health manager
-		case hmMsg := <-e.hmMsg:
+		// Message about a new added server from the RPC
+		case <-e.newServersRPC:
 			go func() {
-				logrus.Debugf("Message from the health manager %v", hmMsg)
+				e.topology.Debug()
+			}()
+
+		// Message about servers to be updated from either the health manager or the RPC
+		case hmMsg := <-agg:
+			go func() {
 				// TODO: Complete...
 				// hmMsg.Updated includes the set of servers to be updated
 				// src & dst IPs, src ID, cluster ID, pkt type
 				for _, server := range hmMsg.Updated {
+					logrus.Debugf("[LeafBus] Sending update pkt to server %d", server.ID)
 					horusPkt := &horus_net.HorusPacket{
 						PktType:    horus_net.PKT_TYPE_KEEP_ALIVE,
 						ClusterID:  0xffff,

@@ -26,6 +26,44 @@ func failLeaf(pool *grpcpool.Pool, leafID uint32) {
 	log.Println(resp.Status)
 }
 
+func failServer(pool *grpcpool.Pool, serverID uint32) {
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		log.Println(err)
+	}
+	defer conn.Close()
+
+	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	serverInfo := &horus_pb.ServerInfo{Id: serverID}
+
+	resp, _ := client.FailServer(context.Background(), serverInfo)
+	log.Println(resp.Status)
+}
+
+func addServer(pool *grpcpool.Pool,
+	serverID, portID, workersCount uint32,
+	address string,
+	leafId uint32,
+) {
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		log.Println(err)
+	}
+	defer conn.Close()
+
+	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	serverInfo := &horus_pb.ServerInfo{
+		Id:           serverID,
+		PortId:       portID,
+		Address:      address,
+		WorkersCount: workersCount,
+		LeafID:       leafId,
+	}
+
+	resp, _ := client.AddServer(context.Background(), serverInfo)
+	log.Println(resp.Status)
+}
+
 func getVCs(pool *grpcpool.Pool) {
 	conn, err := pool.Get(context.Background())
 	if err != nil {
@@ -80,8 +118,19 @@ func createVCPool() *grpcpool.Pool {
 func main() {
 
 	topoPool := createTopoPool()
-	failLeaf(topoPool, 1)
+	// logrus.Info("Failing server 0")
+	// failServer(topoPool, 0)
+	// time.Sleep(time.Second)
+	// logrus.Info("Failing server 1")
+	// failServer(topoPool, 1)
+	// time.Sleep(time.Second)
+	// logrus.Info("Failing server 2")
+	// failServer(topoPool, 2)
+	// time.Sleep(time.Second)
+	// logrus.Info("Failing leaf 0")
+	// failLeaf(topoPool, 0)
 
+	addServer(topoPool, 9, 1, 8, "", 0)
 	// vcPool := createVCPool()
 	// getVCs(vcPool)
 }

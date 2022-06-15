@@ -55,6 +55,8 @@ func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig) *leafContr
 	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
 	asicIngress := make(chan []byte, horus_net.DefaultUnixSockRecvSize)
 	hmEgress := make(chan *core.LeafHealthMsg, horus_net.DefaultUnixSockRecvSize)
+	updatedServersRPC := make(chan *core.LeafHealthMsg, horus_net.DefaultUnixSockRecvSize)
+	newServersRPC := make(chan *horus_net.ServerAddedMessage, horus_net.DefaultUnixSockRecvSize)
 
 	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(ctrlID), target)
@@ -64,10 +66,21 @@ func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig) *leafContr
 		logrus.Fatal(err)
 	}
 
-	rpcEndPoint := horus_net.NewLeafRpcEndpoint(cfg.TopoServer, cfg.VCServer)
+	leaf, _ := topology.Leaves.Load(ctrlID)
+	if leaf == nil {
+		logrus.Fatal("[Leaf] Leaf %d doesn't exist in the topology", ctrlID)
+	}
 
-	ch := NewLeafBusChan(hmEgress, asicIngress, asicEgress)
-	bus := NewLeafBus(ch, healthMgr, bfrt)
+	rpcEndPoint := horus_net.NewLeafRpcEndpoint(cfg.TopoServer,
+		cfg.VCServer,
+		leaf.Address,
+		topology,
+		vcm,
+		updatedServersRPC,
+		newServersRPC)
+
+	ch := NewLeafBusChan(hmEgress, updatedServersRPC, newServersRPC, asicIngress, asicEgress)
+	bus := NewLeafBus(ch, healthMgr, topology, bfrt)
 	return &leafController{
 		rpcEndPoint: rpcEndPoint,
 		healthMgr:   healthMgr,
@@ -93,15 +106,17 @@ func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineCon
 	asicIngress := make(chan []byte, horus_net.DefaultUnixSockRecvSize)
 	activeNode := make(chan *core.LeafHealthMsg, horus_net.DefaultUnixSockRecvSize)
 	failedLeaves := make(chan *horus_net.LeafFailedMessage, horus_net.DefaultRpcRecvSize)
+	failedServers := make(chan *horus_net.ServerFailedMessage, horus_net.DefaultRpcRecvSize)
+	newServers := make(chan *horus_net.ServerAddedMessage, horus_net.DefaultRpcRecvSize)
 
 	spine := topology.GetNode(ctrlID, model.NodeType_Spine)
 	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(spine.ID), target)
 
 	rpcEndPoint := horus_net.NewSpineRpcEndpoint(spine.Address, cfg.VCServer,
-		topology, vcm, failedLeaves)
-	ch := NewSpineBusChan(activeNode, failedLeaves, asicIngress, asicEgress)
-	bus := NewSpineBus(ch, nil, bfrt)
+		topology, vcm, failedLeaves, failedServers, newServers)
+	ch := NewSpineBusChan(activeNode, failedLeaves, failedServers, newServers, asicIngress, asicEgress)
+	bus := NewSpineBus(ch, topology, nil, bfrt)
 	return &spineController{
 		rpcEndPoint: rpcEndPoint,
 		healthMgr:   nil,
@@ -125,18 +140,21 @@ func (c *controller) Start() {
 func (c *leafController) Start() {
 	logrus.
 		WithFields(logrus.Fields{"ID": c.ID}).
-		Infof("Starting leaf switch controller")
+		Infof("[Leaf] Starting leaf switch controller")
 	c.controller.Start()
 
 	go c.rpcEndPoint.Start()
-	logrus.Debug("LEAF")
+	logrus.Debugf("[Leaf] Fetching all VCs from %s", c.rpcEndPoint.VCAddress)
 	time.Sleep(time.Second)
 	vcs, err := c.rpcEndPoint.GetVCs()
-	logrus.Debug("LEAF DONE")
+	if len(vcs) == 0 {
+		logrus.Warnf("[Leaf] No VCs were fetched from %s", c.rpcEndPoint.VCAddress)
+	} else {
+		logrus.Debugf("[Leaf] %d VCs were fetched", len(vcs))
+	}
 	if err != nil {
 		logrus.Error(err)
 	} else {
-		logrus.Debug("LEAF VCs count: ", len(vcs))
 		for _, vcConf := range vcs {
 			vc := model.NewVC(vcConf, c.topology)
 			c.vcm.AddVC(vc)
@@ -150,7 +168,7 @@ func (c *leafController) Start() {
 func (c *leafController) Shutdown() {
 	logrus.
 		WithFields(logrus.Fields{"ID": c.ID}).
-		Infof("Shutting down leaf switch controller")
+		Infof("[Leaf] Shutting down leaf switch controller")
 	c.bus.DoneChan <- true
 	c.healthMgr.DoneChan <- true
 	close(c.asicEgress)
@@ -161,17 +179,20 @@ func (c *leafController) Shutdown() {
 func (c *spineController) Start() {
 	logrus.
 		WithFields(logrus.Fields{"ID": c.ID}).
-		Infof("Starting spine switch controller")
+		Infof("[Spine] Starting spine switch controller")
 	c.controller.Start()
 	go c.rpcEndPoint.Start()
-	logrus.Debug("SPINE")
+	logrus.Debugf("[Spine] Fetching all VCs from %s", c.rpcEndPoint.VCAddress)
 	time.Sleep(time.Second)
 	vcs, err := c.rpcEndPoint.GetVCs()
-	logrus.Debug("SPINE DONE")
+	if len(vcs) == 0 {
+		logrus.Warnf("[Spine] No VCs were fetched from %s", c.rpcEndPoint.VCAddress)
+	} else {
+		logrus.Debugf("[Spine] %d VCs were fetched", len(vcs))
+	}
 	if err != nil {
 		logrus.Error(err)
 	} else {
-		logrus.Debug("SPINE VCs count: ", len(vcs))
 		for _, vcConf := range vcs {
 			vc := model.NewVC(vcConf, c.topology)
 			c.vcm.AddVC(vc)

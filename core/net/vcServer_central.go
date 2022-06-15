@@ -6,6 +6,7 @@ import (
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 	context "golang.org/x/net/context"
+	"google.golang.org/grpc/peer"
 )
 
 type centralVCServer struct {
@@ -17,8 +18,9 @@ func NewCentralVCServer(vcm *core.VCManager) *centralVCServer {
 	return &centralVCServer{vcm: vcm}
 }
 
-func (v *centralVCServer) GetVCs(context.Context, *empty.Empty) (*horus_pb.VCsResponse, error) {
-	logrus.Debug("GetVCs() @Central")
+func (v *centralVCServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
+	p, _ := peer.FromContext(ctx)
+	logrus.Debugf("[CentralVCServer] GetVCs() at Central called by %s", p.Addr.String())
 	vcs := v.vcm.GetVCs()
 	rsp := &horus_pb.VCsResponse{}
 	for _, vc := range vcs {

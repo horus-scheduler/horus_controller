@@ -8,9 +8,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-type binRootConfig struct {
+type BinRootConfig struct {
 	TopoServer string
 	VCServer   string
+	LogLevel   string
 }
 
 type topoRootConfig struct {
@@ -54,7 +55,7 @@ func setCommonPaths(configName string, configPaths ...string) {
 	}
 }
 
-func ReadConfigFile(configName string, configPaths ...string) *binRootConfig {
+func ReadConfigFile(configName string, configPaths ...string) *BinRootConfig {
 	cfgName := "horus-ctrl-central"
 	setCommonPaths(cfgName, configPaths...)
 
@@ -62,9 +63,10 @@ func ReadConfigFile(configName string, configPaths ...string) *binRootConfig {
 	if err != nil {             // Handle errors reading the config file
 		log.Fatalf("Fatal error config file: %s \n", err)
 	}
-	cfg := &binRootConfig{}
+	cfg := &BinRootConfig{}
 	cfg.TopoServer = viper.GetString("rpc.servers.topoAddress")
 	cfg.VCServer = viper.GetString("rpc.servers.vcAddress")
+	cfg.LogLevel = viper.GetString("log.level")
 	// cfg.TorAddresses = viper.GetStringSlice("tors.addresses")
 
 	return cfg

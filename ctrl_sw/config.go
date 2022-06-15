@@ -16,6 +16,7 @@ type bfrtContext struct {
 
 type rootConfig struct {
 	bfrtContext
+	LogLevel    string
 	AsicIntf    string
 	TopoServer  string
 	VCServer    string
@@ -57,6 +58,7 @@ func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
 	cfg.VCServer = viper.GetString("centralized.vcAddress")
 	cfg.Timeout = viper.GetInt64("controllers.timeout")
 	cfg.MgmtAddress = viper.GetString("controllers.mgmtAddress")
+	cfg.LogLevel = viper.GetString("log.level")
 	err = viper.UnmarshalKey("controllers.spines", &cfg.SpineIDs)
 	if err != nil {
 		logrus.Errorf("unable to decode into struct, %v", err)

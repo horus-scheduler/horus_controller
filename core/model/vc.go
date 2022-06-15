@@ -56,24 +56,27 @@ func NewVC(vcConfig *horus_pb.VCInfo, topology *Topology) *VirtualCluster {
 // bool: a leaf is detached
 func (vc *VirtualCluster) DetachServer(serverID uint16) (bool, bool) {
 	detachLeaf := false
-	if server, ok := vc.Servers.Load(serverID); ok {
-		leaf := server.Parent
-		leafHasOtherChild := false
-		for _, s := range leaf.Children {
-			if s.ID != serverID {
-				if _, ok1 := vc.Servers.Load(s.ID); ok1 {
-					leafHasOtherChild = true
-					break
-				}
+	server, ok := vc.Servers.Load(serverID)
+	if !ok {
+		return false, detachLeaf
+	}
+
+	leaf := server.Parent
+	leafHasOtherChild := false
+	for _, s := range leaf.Children {
+		if s.ID != serverID {
+			_, ok1 := vc.Servers.Load(s.ID)
+			if ok1 {
+				leafHasOtherChild = true
+				break
 			}
 		}
-		// vc.Leaves.Delete(leaf.ID)
-		detachLeaf = !leafHasOtherChild
-
-		vc.Servers.Delete(serverID)
-		return true, detachLeaf
 	}
-	return false, detachLeaf
+	// vc.Leaves.Delete(leaf.ID)
+	detachLeaf = !leafHasOtherChild
+
+	vc.Servers.Delete(serverID)
+	return true, detachLeaf
 }
 
 // Detach a leaf from the VC, and automatically detach all servers.
@@ -87,19 +90,19 @@ func (vc *VirtualCluster) DetachLeaf(leafID uint16) (bool, []*Node) {
 	if leaf, ok := vc.Leaves.Load(leafID); ok {
 		detachLeaf := false
 		for _, server := range leaf.Children {
-			logrus.Debug("Removing server: ", server.ID)
+			logrus.Debugf("[VC] Removing server %d", server.ID)
 			serverDetached, detachLeaf := vc.DetachServer(server.ID)
 			if serverDetached {
 				detachedServers = append(detachedServers, server)
 			}
-			logrus.Debug("Removed?: ", serverDetached)
+			logrus.Debugf("[VC] Server %d Removed? %t", server.ID, serverDetached)
 			isDetached = isDetached || detachLeaf
 		}
 		if detachLeaf {
 			vc.Leaves.Delete(leaf.ID)
 		}
 	}
-	logrus.Debug("LEAF REMOVED: ", isDetached)
+	logrus.Debug("[VC] Leaf %d removed? %t", leafID, isDetached)
 	return isDetached, detachedServers
 }
 

@@ -20,7 +20,9 @@ type CentralRpcEndpoint struct {
 	vcLAddr   string
 	topoLAddr string
 
-	failedLeaves chan *LeafFailedMessage
+	failedLeaves  chan *LeafFailedMessage
+	failedServers chan *ServerFailedMessage
+	newServers    chan *ServerAddedMessage
 
 	topology      *model.Topology
 	vcm           *core.VCManager
@@ -41,6 +43,8 @@ func NewCentralRpcEndpoint(topoLAddr, vcLAddr string,
 		vcm:           vcm,
 		spineConnPool: connPool,
 		failedLeaves:  make(chan *LeafFailedMessage, DefaultRpcRecvSize),
+		failedServers: make(chan *ServerFailedMessage, DefaultRpcRecvSize),
+		newServers:    make(chan *ServerAddedMessage, DefaultRpcRecvSize),
 		doneChan:      make(chan bool, 1),
 	}
 }
@@ -64,7 +68,7 @@ func (s *CentralRpcEndpoint) createTopoListener() error {
 		return err
 	}
 	rpcServer := grpc.NewServer()
-	topoServer := NewCentralTopologyServer(s.topology, s.vcm, s.failedLeaves)
+	topoServer := NewCentralTopologyServer(s.topology, s.vcm, s.failedLeaves, s.failedServers, s.newServers)
 	horus_pb.RegisterHorusTopologyServer(rpcServer, topoServer)
 	return rpcServer.Serve(lis)
 }
@@ -88,19 +92,58 @@ func (s *CentralRpcEndpoint) createSpineConnPool(spineAddr string) *grpcpool.Poo
 
 func (s *CentralRpcEndpoint) sendFailedLeafEvent(e *horus_pb.LeafInfo, dst *model.Node) error {
 	pool, ok := s.spineConnPool[dst.ID]
-	if ok {
-		conn, err := pool.Get(context.Background())
-		if err != nil {
-			log.Println(err)
-			return err
-		}
-		defer conn.Close()
-		logrus.Debugf("Sending FailLeaf to Spine: %d", dst.ID)
-		client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
-		_, err = client.FailLeaf(context.Background(), e)
+	if !ok {
+		return errors.New("Spine ID " + strconv.Itoa(int(dst.ID)) + " doesn't exist!")
+	}
+
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
 		return err
 	}
-	return errors.New("Spine ID " + strconv.Itoa(int(dst.ID)) + " doesn't exist!")
+	defer conn.Close()
+	logrus.Debugf("[CentralRPC] Sending FailLeaf to Spine: %d", dst.ID)
+	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	_, err = client.FailLeaf(context.Background(), e)
+	return err
+}
+
+func (s *CentralRpcEndpoint) sendFailedServerEvent(e *horus_pb.ServerInfo, dst *model.Node) error {
+	pool, ok := s.spineConnPool[dst.ID]
+	if !ok {
+		return errors.New("spine ID " + strconv.Itoa(int(dst.ID)) + " doesn't exist!")
+	}
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
+		return err
+	}
+	defer conn.Close()
+	logrus.Debugf("[CentralRPC] Sending FailServer to Spine: %d", dst.ID)
+	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	_, err = client.FailServer(context.Background(), e)
+	return err
+}
+
+func (s *CentralRpcEndpoint) sendAddServerEvent(msg *ServerAddedMessage) error {
+	spine := msg.Dst
+	if spine == nil {
+		return errors.New("spine doesn't exist")
+	}
+	pool, ok := s.spineConnPool[spine.ID]
+	if !ok {
+		return errors.New("the pool for spine " + strconv.Itoa(int(spine.ID)) + " doesn't exist")
+	}
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
+		return err
+	}
+	defer conn.Close()
+	logrus.Debugf("[CentralRPC] Sending AddServer to Spine %d", spine.ID)
+	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	_, err = client.AddServer(context.Background(), msg.Server)
+	return err
 }
 
 func (s *CentralRpcEndpoint) processEvents() {
@@ -110,8 +153,20 @@ func (s *CentralRpcEndpoint) processEvents() {
 			for _, dst := range failedLeaf.Dsts {
 				err := s.sendFailedLeafEvent(failedLeaf.Leaf, dst)
 				if err != nil {
-					log.Println(err)
+					logrus.Error(err)
 				}
+			}
+		case failedServer := <-s.failedServers:
+			for _, dst := range failedServer.Dsts {
+				err := s.sendFailedServerEvent(failedServer.Server, dst)
+				if err != nil {
+					logrus.Error(err)
+				}
+			}
+		case newServerMsg := <-s.newServers:
+			err := s.sendAddServerEvent(newServerMsg)
+			if err != nil {
+				logrus.Error(err)
 			}
 
 		default:

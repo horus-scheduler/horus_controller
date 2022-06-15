@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"sync"
 
+	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 )
 
@@ -99,20 +100,29 @@ func (s *Topology) GetNodeByAddress(nodeAddress string, nodeType NodeType) *Node
 	return nil
 }
 
-func (s *Topology) AddServerToLeaf(srvConfig *serverConfig, leafID uint16) (*Node, error) {
+func (s *Topology) AddServerToLeaf(serverInfo *horus_pb.ServerInfo, leafID uint16) (*Node, error) {
 	leaf := s.GetNode(leafID, NodeType_Leaf)
+	existingServer := s.GetNode(uint16(serverInfo.Id), NodeType_Server)
 	if leaf == nil {
-		return nil, errors.New("Leaf " + strconv.Itoa(int(leafID)) + " doesn't exist!")
+		return nil, errors.New("leaf " + strconv.Itoa(int(leafID)) + " doesn't exist!")
+	}
+	if existingServer != nil {
+		if existingServer.Parent == leaf {
+			logrus.Warnf("[Topology] Server %d already exists", existingServer.ID)
+			return nil, errors.New("server " + strconv.Itoa(int(serverInfo.Id)) + " already exists")
+		} else {
+			return nil, errors.New("server " + strconv.Itoa(int(serverInfo.Id)) + " already exists with mismatched leaf")
+		}
 	}
 	leaf.Lock()
 	defer leaf.Unlock()
 
-	server := NewNode(srvConfig.Address, "", srvConfig.ID, srvConfig.PortID, NodeType_Server)
+	server := NewNode(serverInfo.Address, "", uint16(serverInfo.Id), uint16(serverInfo.PortId), NodeType_Server)
 	server.Parent = leaf
 	leaf.Children = append(leaf.Children, server)
 	workerID := leaf.LastWorkerID + 1
 	server.FirstWorkerID = workerID
-	workerID += srvConfig.WorkersCount
+	workerID += uint16(serverInfo.WorkersCount)
 	server.LastWorkerID = workerID - 1
 	leaf.LastWorkerID = server.LastWorkerID
 	s.Servers.Store(server.ID, server)
@@ -120,12 +130,14 @@ func (s *Topology) AddServerToLeaf(srvConfig *serverConfig, leafID uint16) (*Nod
 }
 
 // Input: Global serverID
-// Output: a list of updated servers
-func (s *Topology) RemoveServer(serverID uint16) []*Node {
+// Output: a list of updated servers and boolean indicating whether it's removed
+func (s *Topology) RemoveServer(serverID uint16) (bool, []*Node) {
+	logrus.Debugf("[Topology] Removing server %d", serverID)
 	server := s.GetNode(serverID, NodeType_Server)
 	var updatedServers []*Node
 	if server == nil {
-		return updatedServers
+		logrus.Debugf("[Topology] Server %d isn't found", serverID)
+		return false, updatedServers
 	}
 	s.Lock()
 	defer s.Unlock()
@@ -146,17 +158,21 @@ func (s *Topology) RemoveServer(serverID uint16) []*Node {
 			removedIdx = sIdx
 		}
 	}
-	// leaf.Lock()
-	// defer leaf.Unlock()
+
 	leaf.FirstWorkerID = 0
 	if workerID == 0 {
 		leaf.LastWorkerID = 0
 	} else {
 		leaf.LastWorkerID = workerID - 1
 	}
+	logrus.Debug("[Topology] Updating leaf's children")
+	leaf.Lock()
 	leaf.Children = append(leaf.Children[:removedIdx], leaf.Children[removedIdx+1:]...)
+	leaf.Unlock()
+	logrus.Debug("[Topology] Leaf's children are updated")
 	s.Servers.Delete(serverID)
-	return updatedServers
+	logrus.Debugf("[Topology] Number of servers to be updated = %d", len(updatedServers))
+	return true, updatedServers
 }
 
 // Return the local index of the removed leaf within the spine

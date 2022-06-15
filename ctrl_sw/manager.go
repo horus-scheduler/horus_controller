@@ -25,8 +25,12 @@ type switchManager struct {
 
 type SwitchManagerOption func(*switchManager)
 
-func initLogger() {
-	logrus.SetLevel(logrus.DebugLevel)
+func initLogger(cfg *rootConfig) {
+	if lvl, err := logrus.ParseLevel(cfg.LogLevel); err == nil {
+		logrus.SetLevel(lvl)
+	} else {
+		logrus.SetLevel(logrus.InfoLevel)
+	}
 	logrus.SetFormatter(&logrus.TextFormatter{
 		DisableLevelTruncation: true,
 		FullTimestamp:          false,
@@ -35,12 +39,13 @@ func initLogger() {
 }
 
 func NewSwitchManager(topoFp, cfgFp string, opts ...SwitchManagerOption) *switchManager {
-	// Initialize program-related structures
-	initLogger()
-	horus_net.InitHorusDefinitions()
-
+	logrus.SetLevel(logrus.TraceLevel)
 	// Read configuration
 	cfg := ReadConfigFile(cfgFp)
+
+	// Initialize program-related structures
+	initLogger(cfg)
+	horus_net.InitHorusDefinitions()
 
 	// Initialize program status
 	status := core.NewCtrlStatus()
@@ -101,27 +106,10 @@ func (sc *switchManager) Run() {
 		go l.Start()
 	}
 
-	// Experimenting with shutting down a leaf
-	/*
-		go func() {
-			l := sc.leaves[0]
-			time.Sleep(time.Duration(10000) * time.Millisecond)
-			l.Shutdown()
-			sc.Lock()
-			sc.leaves = sc.leaves[1:]
-			sc.Unlock()
-		}()
-		for {
-			time.Sleep(time.Duration(1000) * time.Millisecond)
-			sc.RLock()
-			logrus.Debug(len(sc.leaves))
-			sc.RUnlock()
-		}
-	*/
 	for {
 		select {
 		case failed := <-sc.rpcIngress:
-			logrus.Debugf("Manager: removing leaf %d", failed.Leaf.Id)
+			logrus.Debugf("[Manager] Removing leaf %d", failed.Leaf.Id)
 			var removedLeaf *leafController = nil
 			removedLeafIdx := -1
 			for leafIdx, leaf := range sc.leaves {
@@ -134,9 +122,9 @@ func (sc *switchManager) Run() {
 				removedLeaf.Shutdown()
 				time.Sleep(time.Second)
 				sc.Lock()
-				logrus.Debugf("Manager: leaves count = %d", len(sc.leaves))
+				logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
 				sc.leaves = append(sc.leaves[:removedLeafIdx], sc.leaves[removedLeafIdx+1:]...)
-				logrus.Debugf("Manager: leaves count = %d", len(sc.leaves))
+				logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
 				sc.Unlock()
 			}
 		default:

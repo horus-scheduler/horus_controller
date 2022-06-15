@@ -1,6 +1,10 @@
 # This is a configuration file for Horus switch controller
 title = "Horus switch controller"
 
+# Available options: trace, debug, info, warn, error, fatal, panic
+[log]
+level = "debug"
+
 # only for Tofino
 [asic]
     intf = "bf_pci0"
