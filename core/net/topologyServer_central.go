@@ -23,6 +23,11 @@ type ServerAddedMessage struct {
 	Dst    *model.Node
 }
 
+type LeafAddedMessage struct {
+	Leaf *horus_pb.LeafInfo
+	Dst  *model.Node
+}
+
 func NewLeafFailedMessage(leaf *horus_pb.LeafInfo, dsts []*model.Node) *LeafFailedMessage {
 	return &LeafFailedMessage{Leaf: leaf, Dsts: dsts}
 }
@@ -35,11 +40,16 @@ func NewServerAddedMessage(server *horus_pb.ServerInfo, dst *model.Node) *Server
 	return &ServerAddedMessage{Server: server, Dst: dst}
 }
 
+func NewLeafAddedMessage(leaf *horus_pb.LeafInfo, dst *model.Node) *LeafAddedMessage {
+	return &LeafAddedMessage{Leaf: leaf, Dst: dst}
+}
+
 type centralTopologyServer struct {
 	horus_pb.UnimplementedHorusTopologyServer
 
 	failedLeaves  chan *LeafFailedMessage
 	failedServers chan *ServerFailedMessage
+	newLeaves     chan *LeafAddedMessage
 	newServers    chan *ServerAddedMessage
 	topology      *model.Topology
 	vcm           *core.VCManager
@@ -49,6 +59,7 @@ func NewCentralTopologyServer(topology *model.Topology,
 	vcm *core.VCManager,
 	failedLeaves chan *LeafFailedMessage,
 	failedServers chan *ServerFailedMessage,
+	newLeaves chan *LeafAddedMessage,
 	newServers chan *ServerAddedMessage,
 ) *centralTopologyServer {
 	return &centralTopologyServer{
@@ -56,20 +67,33 @@ func NewCentralTopologyServer(topology *model.Topology,
 		vcm:           vcm,
 		failedLeaves:  failedLeaves,
 		failedServers: failedServers,
+		newLeaves:     newLeaves,
 		newServers:    newServers,
 	}
 }
-func (s *centralTopologyServer) AddLeaf(ctx context.Context, leaf *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
-	logrus.Debug("[CentralTopoServer] Adding a leaf")
-	return &horus_pb.HorusResponse{Status: "OK"}, nil
+func (s *centralTopologyServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
+	logrus.Debugf("[CentralTopoServer] Adding a leaf %d to spine %d", leafInfo.Id, leafInfo.SpineID)
+	leaf, err := s.topology.AddLeafToSpine(leafInfo)
+	if err != nil {
+		logrus.Error(err)
+		return &horus_pb.HorusResponse{Status: "FAILED"}, nil
+	}
+	if leaf.Parent != nil {
+		spine := leaf.Parent
+		s.newLeaves <- NewLeafAddedMessage(leafInfo, spine)
+		return &horus_pb.HorusResponse{Status: "OK"}, nil
+	}
+
+	logrus.Error("[CentralTopoServer] Adding leaf %d failed because it doesn't belong to a spine", leaf.ID)
+	return &horus_pb.HorusResponse{Status: "FAILED"}, nil
 }
 
 func (s *centralTopologyServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	leafID := uint16(leafInfo.Id)
-	logrus.Debugf("[CentralTopoServer] Failing a leaf %d at Central", leafID)
+	logrus.Debugf("[CentralTopoServer] Failing a leaf %d", leafID)
 	leaf := s.topology.GetNode(leafID, model.NodeType_Leaf)
 	if leaf == nil {
-		logrus.Debugf("[CentralTopoServer] Leaf %d doesn't exist at Central", leafID)
+		logrus.Debugf("[CentralTopoServer] Leaf %d doesn't exist", leafID)
 		return &horus_pb.HorusResponse{Status: "FAILD"}, nil
 	}
 
@@ -107,7 +131,7 @@ func (s *centralTopologyServer) FailLeaf(ctx context.Context, leafInfo *horus_pb
 }
 
 func (s *centralTopologyServer) AddServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
-	logrus.Debugf("[CentralTopoServer] Adding a server %d at Central", serverInfo.Id)
+	logrus.Debugf("[CentralTopoServer] Adding a server %d", serverInfo.Id)
 	server, err := s.topology.AddServerToLeaf(serverInfo, uint16(serverInfo.LeafID))
 	if err != nil {
 		logrus.Error(err)
@@ -131,10 +155,10 @@ func (s *centralTopologyServer) AddServer(ctx context.Context, serverInfo *horus
 
 func (s *centralTopologyServer) FailServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
 	serverID := uint16(serverInfo.Id)
-	logrus.Debugf("[CentralTopoServer] Failing a server %d at Central", serverID)
+	logrus.Debugf("[CentralTopoServer] Failing a server %d", serverID)
 	server := s.topology.GetNode(serverID, model.NodeType_Server)
 	if server == nil {
-		logrus.Debugf("[CentralTopoServer] Server %d doesn't exist at Central", serverID)
+		logrus.Debugf("[CentralTopoServer] Server %d doesn't exist", serverID)
 		return &horus_pb.HorusResponse{Status: "FAILD"}, nil
 	}
 

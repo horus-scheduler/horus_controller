@@ -29,6 +29,9 @@ type SpineRpcEndpoint struct {
 	failedServersEgExt chan *ServerFailedMessage
 	failedServersEgInt chan *ServerFailedMessage
 
+	newLeavesEgExt chan *LeafAddedMessage
+	newLeavesEgInt chan *LeafAddedMessage
+
 	newServersEgExt chan *ServerAddedMessage
 	newServersEgInt chan *ServerAddedMessage
 
@@ -43,6 +46,7 @@ func NewSpineRpcEndpoint(topoLAddr, vcAddress string,
 	vcm *core.VCManager,
 	failedLeaves chan *LeafFailedMessage,
 	failedServers chan *ServerFailedMessage,
+	newLeaves chan *LeafAddedMessage,
 	newServers chan *ServerAddedMessage,
 ) *SpineRpcEndpoint {
 	return &SpineRpcEndpoint{
@@ -54,6 +58,8 @@ func NewSpineRpcEndpoint(topoLAddr, vcAddress string,
 		failedLeavesEgInt:  make(chan *LeafFailedMessage, DefaultRpcRecvSize),
 		failedServersEgExt: failedServers,
 		failedServersEgInt: make(chan *ServerFailedMessage, DefaultRpcRecvSize),
+		newLeavesEgExt:     newLeaves,
+		newLeavesEgInt:     make(chan *LeafAddedMessage, DefaultRpcRecvSize),
 		newServersEgExt:    newServers,
 		newServersEgInt:    make(chan *ServerAddedMessage, DefaultRpcRecvSize),
 		mgConnPool:         make(map[string]*grpcpool.Pool),
@@ -70,7 +76,10 @@ func (s *SpineRpcEndpoint) createTopoListener() error {
 	}
 	rpcServer := grpc.NewServer()
 	topoServer := NewSpineTopologyServer(s.topology, s.vcm,
-		s.failedLeavesEgInt, s.failedServersEgInt, s.newServersEgInt)
+		s.failedLeavesEgInt,
+		s.failedServersEgInt,
+		s.newLeavesEgInt,
+		s.newServersEgInt)
 	horus_pb.RegisterHorusTopologyServer(rpcServer, topoServer)
 	return rpcServer.Serve(lis)
 }
@@ -201,6 +210,29 @@ func (s *SpineRpcEndpoint) sendServerFailed(failed *ServerFailedMessage) error {
 	return errors.New("failed leaf doesn't exist")
 }
 
+func (s *SpineRpcEndpoint) sendLeafAdded(newLeaf *LeafAddedMessage) error {
+	if newLeaf.Leaf != nil && newLeaf.Dst != nil {
+		addr := newLeaf.Dst.MgmtAddress
+		logrus.Debugf("[SpineRPC] Mgmt Address: %s", addr)
+		if connPool, found := s.mgConnPool[addr]; !found {
+			return errors.New("connection pool isn't found")
+		} else {
+			conn, err := connPool.Get(context.Background())
+			if err != nil {
+				logrus.Error(err)
+				return err
+			}
+			defer conn.Close()
+			client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+			logrus.Debug("[SpineRPC] Sending add leaf to manager")
+			_, err = client.AddLeaf(context.Background(), newLeaf.Leaf)
+			logrus.Debug("[SpineRPC] Returned from sending add leaf to manager")
+			return err
+		}
+	}
+	return errors.New("added leaf doesn't exist")
+}
+
 func (s *SpineRpcEndpoint) sendServerAdded(newServer *ServerAddedMessage) error {
 	if newServer.Server != nil && newServer.Dst != nil {
 		addr := newServer.Dst.Address
@@ -245,6 +277,16 @@ func (s *SpineRpcEndpoint) processEvents() {
 			}
 			logrus.Debugf("[SpineRPC] Send failed %d server to failedServersEgExt", failed.Server.Id)
 			s.failedServersEgExt <- NewServerFailedMessage(failed.Server, nil)
+		case newLeaf := <-s.newLeavesEgInt:
+			logrus.Debug("[SpineRPC] Add leaf...")
+			logrus.Debugf("[SpineRPC] Calling sendServerAdded: %d", newLeaf.Leaf.Id)
+			s.createLeafConnPool()
+			err := s.sendLeafAdded(newLeaf)
+			if err != nil {
+				logrus.Warn(err)
+			}
+			logrus.Debugf("[SpineRPC] Send added leaf %d to newLeavesEgExt", newLeaf.Leaf.Id)
+			s.newLeavesEgExt <- NewLeafAddedMessage(newLeaf.Leaf, newLeaf.Dst)
 		case newServer := <-s.newServersEgInt:
 			logrus.Debug("[SpineRPC] Add server...")
 			logrus.Debugf("[SpineRPC] Calling sendServerAdded: %d", newServer.Server.Id)

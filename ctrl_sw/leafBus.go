@@ -41,6 +41,7 @@ func NewLeafBusChan(hmIngressActiveNode chan *core.LeafHealthMsg,
 // LeafBus ...
 type LeafBus struct {
 	*LeafBusChan
+	ctrlID    uint16
 	healthMgr *core.LeafHealthManager
 	topology  *model.Topology
 	bfrt      *bfrtC.Client // BfRt client
@@ -48,12 +49,13 @@ type LeafBus struct {
 }
 
 // NewLeafBus ...
-func NewLeafBus(busChan *LeafBusChan,
+func NewLeafBus(ctrlID uint16, busChan *LeafBusChan,
 	healthMgr *core.LeafHealthManager,
 	topology *model.Topology,
 	bfrt *bfrtC.Client) *LeafBus {
 	return &LeafBus{
 		LeafBusChan: busChan,
+		ctrlID:      ctrlID,
 		healthMgr:   healthMgr,
 		topology:    topology,
 		bfrt:        bfrt,
@@ -65,13 +67,13 @@ func (e *LeafBus) processIngress() {
 	agg := make(chan *core.LeafHealthMsg)
 	go func(c chan *core.LeafHealthMsg) {
 		for msg := range c {
-			logrus.Debug("[LeafBus] Received updated servers from health manager")
+			logrus.Debugf("[LeafBus-%d] Received updated servers from health manager", e.ctrlID)
 			agg <- msg
 		}
 	}(e.hmMsg)
 	go func(c chan *core.LeafHealthMsg) {
 		for msg := range c {
-			logrus.Debug("[LeafBus] Received updated servers from RPC")
+			logrus.Debugf("[LeafBus-%d] Received updated servers from RPC", e.ctrlID)
 			agg <- msg
 		}
 	}(e.updatedServersRPC)
@@ -83,12 +85,13 @@ func (e *LeafBus) processIngress() {
 		}
 		select {
 		case <-e.DoneChan:
-			logrus.Debug("[LeafBus] Shutting down the leaf bus")
+			logrus.Debugf("[LeafBus-%d] Shutting down the leaf bus", e.ctrlID)
 			stop = true
+
 		// Message about a new added server from the RPC
 		case message := <-e.newServersRPC:
 			go func() {
-				logrus.Debugf("[LeafBus] Sending update pkt to server %d", message.Server.Id)
+				logrus.Debugf("[LeafBus-%d] Sending update pkt to server %d", e.ctrlID, message.Server.Id)
 				e.topology.Debug()
 			}()
 
@@ -99,7 +102,7 @@ func (e *LeafBus) processIngress() {
 				// hmMsg.Updated includes the set of servers to be updated
 				// src & dst IPs, src ID, cluster ID, pkt type
 				for _, server := range hmMsg.Updated {
-					logrus.Debugf("[LeafBus] Sending update pkt to server %d", server.ID)
+					logrus.Debugf("[LeafBus-%d] Sending update pkt to server %d", e.ctrlID, server.ID)
 					horusPkt := &horus_net.HorusPacket{
 						PktType:    horus_net.PKT_TYPE_KEEP_ALIVE,
 						ClusterID:  0xffff,
@@ -148,6 +151,11 @@ func (e *LeafBus) processIngress() {
 	}
 }
 
+func (e *LeafBus) initialize() {
+	logrus.Infof("[LeafBus-%d] Running initialization logic", e.ctrlID)
+}
+
 func (e *LeafBus) Start() {
+	e.initialize()
 	go e.processIngress()
 }

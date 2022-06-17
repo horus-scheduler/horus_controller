@@ -5,19 +5,23 @@ import (
 	"time"
 
 	"github.com/khaledmdiab/horus_controller/core"
+	"github.com/khaledmdiab/horus_controller/core/model"
 	horus_net "github.com/khaledmdiab/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
 )
 
 type switchManager struct {
 	sync.RWMutex
+	topoFp string
+	cfg    *rootConfig
 	status *core.CtrlStatus
 
 	// A single end point per phy. switch to handles pkts to/from the ASIC
 	asicEndPoint *asicEndPoint
 
-	rpcEndPoint *horus_net.ManagerRpcEndpoint
-	rpcIngress  chan *horus_net.LeafFailedMessage
+	rpcEndPoint  *horus_net.ManagerRpcEndpoint
+	failedLeaves chan *horus_net.LeafFailedMessage
+	newLeaves    chan *horus_net.LeafAddedMessage
 
 	leaves []*leafController
 	spines []*spineController
@@ -65,14 +69,18 @@ func NewSwitchManager(topoFp, cfgFp string, opts ...SwitchManagerOption) *switch
 	// ASIC <-> CPU interface.
 	asicIngress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
 	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
-	rpcIngress := make(chan *horus_net.LeafFailedMessage, horus_net.DefaultUnixSockSendSize)
+	failedLeaves := make(chan *horus_net.LeafFailedMessage, horus_net.DefaultUnixSockSendSize)
+	newLeaves := make(chan *horus_net.LeafAddedMessage, horus_net.DefaultUnixSockSendSize)
 	asicEndPoint := NewAsicEndPoint(cfg.AsicIntf, leaves, spines, asicIngress, asicEgress)
-	rpcEndPoint := horus_net.NewManagerRpcEndpoint(cfg.MgmtAddress, rpcIngress)
+	rpcEndPoint := horus_net.NewManagerRpcEndpoint(cfg.MgmtAddress, failedLeaves, newLeaves)
 	s := &switchManager{
+		topoFp:       topoFp,
+		cfg:          cfg,
 		status:       status,
 		asicEndPoint: asicEndPoint,
 		rpcEndPoint:  rpcEndPoint,
-		rpcIngress:   rpcIngress,
+		failedLeaves: failedLeaves,
+		newLeaves:    newLeaves,
 		leaves:       leaves,
 		spines:       spines,
 	}
@@ -108,12 +116,29 @@ func (sc *switchManager) Run() {
 
 	for {
 		select {
-		case failed := <-sc.rpcIngress:
-			logrus.Debugf("[Manager] Removing leaf %d", failed.Leaf.Id)
+		case newLeaf := <-sc.newLeaves:
+			leafID := uint16(newLeaf.Leaf.Id)
+			logrus.Debugf("[Manager] Adding leaf %d", leafID)
+			sc.Lock()
+			logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
+			leafCtrl := NewLeafController(leafID, sc.topoFp, sc.cfg, WithExtraLeaf(newLeaf.Leaf))
+			leaf := leafCtrl.topology.GetNode(leafID, model.NodeType_Leaf)
+			if leaf != nil {
+				sc.leaves = append(sc.leaves, leafCtrl)
+				sc.asicEndPoint.AddLeafCtrl(leafCtrl)
+				go leafCtrl.Start()
+			} else {
+				logrus.Errorf("[Manager] Leaf %d was not added", leafID)
+			}
+			logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
+			sc.Unlock()
+
+		case failedLeaf := <-sc.failedLeaves:
+			logrus.Debugf("[Manager] Removing leaf %d", failedLeaf.Leaf.Id)
 			var removedLeaf *leafController = nil
 			removedLeafIdx := -1
 			for leafIdx, leaf := range sc.leaves {
-				if leaf.ID == uint16(failed.Leaf.Id) {
+				if leaf.ID == uint16(failedLeaf.Leaf.Id) {
 					removedLeaf = leaf
 					removedLeafIdx = leafIdx
 				}
@@ -123,6 +148,7 @@ func (sc *switchManager) Run() {
 				time.Sleep(time.Second)
 				sc.Lock()
 				logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
+				sc.asicEndPoint.RemoveLeafCtrl(removedLeaf)
 				sc.leaves = append(sc.leaves[:removedLeafIdx], sc.leaves[removedLeafIdx+1:]...)
 				logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
 				sc.Unlock()

@@ -28,6 +28,7 @@ message LeafInfo {
     string address = 2;
     repeated ServerInfo servers = 3;
     uint32 spineID = 4;
+    string mgmtAddress = 5;
 }
 
 message ServerInfo {

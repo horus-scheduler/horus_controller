@@ -7,16 +7,7 @@ import (
 
 // CentralBusChan ...
 type CentralBusChan struct {
-	// healthManager channels
-	// recv-from healthManager
-	// send-to healthManager
-
 	// gRPC channels
-	// TODO: recv-from gRPC App server
-	// Not Used: send-to gRPC App client
-
-	// recv-from gRPC ToR server
-	// send-to gRPC ToR client
 }
 
 // NewCentralBusChan ...

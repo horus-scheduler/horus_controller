@@ -64,8 +64,8 @@ func (hm *LeafHealthManager) processFailedNodes(nodes []*model.Node) {
 func (hm *LeafHealthManager) OnNodePingRecv(serverId, portId uint16) {
 	server, ok := hm.topology.Servers.Load(serverId)
 	if !ok {
+		// In our current implementation, the leaf doesn't reply to a server that doesn't exist in the leaf's memory. To add a new server to a leaf, an application should use the client API.
 		return
-		// TODO: should we create it?
 	}
 
 	// Update its internal properties

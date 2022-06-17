@@ -40,6 +40,28 @@ func failServer(pool *grpcpool.Pool, serverID uint32) {
 	log.Println(resp.Status)
 }
 
+func addLeaf(pool *grpcpool.Pool,
+	leafID, spineID uint32,
+	address, mgmtAddress string,
+) {
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		log.Println(err)
+	}
+	defer conn.Close()
+
+	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	leafInfo := &horus_pb.LeafInfo{
+		Id:          leafID,
+		SpineID:     spineID,
+		MgmtAddress: mgmtAddress,
+		Address:     address,
+	}
+
+	resp, _ := client.AddLeaf(context.Background(), leafInfo)
+	log.Println(resp.Status)
+}
+
 func addServer(pool *grpcpool.Pool,
 	serverID, portID, workersCount uint32,
 	address string,
@@ -130,10 +152,18 @@ func main() {
 	// logrus.Info("Failing leaf 0")
 	// failLeaf(topoPool, 0)
 
-	// This one should succeed
-	addServer(topoPool, 9, 1, 8, "", 0)
-	// This one should fail
-	addServer(topoPool, 10, 1, 8, "", 5)
+	// // This one should succeed
+	// addServer(topoPool, 9, 1, 8, "", 0)
+	// // This one should fail
+	// addServer(topoPool, 10, 1, 8, "", 5)
+
+	addLeaf(topoPool, 3, 0, "0.0.0.0:6004", "0.0.0.0:7001")
+	time.Sleep(5 * time.Second)
+	addServer(topoPool, 9, 1, 8, "", 3)
+	time.Sleep(time.Second)
+	addServer(topoPool, 10, 1, 8, "", 3)
+	time.Sleep(time.Second)
+	failLeaf(topoPool, 3)
 
 	// vcPool := createVCPool()
 	// getVCs(vcPool)

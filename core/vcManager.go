@@ -111,7 +111,7 @@ func NewVCManager(topology *model.Topology) *VCManager {
 		vcs:       newVCMap(),
 		serverVCs: newVCListMap(),
 		leafVCs:   newVCListMap(),
-		topology:  topology, // TODO: Do we need topology?
+		topology:  topology,
 	}
 }
 
@@ -215,7 +215,8 @@ func (vcm *VCManager) DetachLeaf(leafID uint16) bool {
 		}
 	}
 	vcm.leafVCs.DeleteVCList(leafID)
-	return found && detached
+	// TODO: found || detached may not be accurate
+	return found || detached
 }
 
 func (vcm *VCManager) Debug() {

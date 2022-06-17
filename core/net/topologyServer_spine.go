@@ -13,6 +13,7 @@ type spineTopologyServer struct {
 
 	failedLeavesToRPC  chan *LeafFailedMessage
 	failedServersToRPC chan *ServerFailedMessage
+	newLeavesToRPC     chan *LeafAddedMessage
 	newServers         chan *ServerAddedMessage
 	topology           *model.Topology
 	vcm                *core.VCManager
@@ -22,6 +23,7 @@ func NewSpineTopologyServer(topology *model.Topology,
 	vcm *core.VCManager,
 	failedLeavesToRPC chan *LeafFailedMessage,
 	failedServersToRPC chan *ServerFailedMessage,
+	newLeavesToRPC chan *LeafAddedMessage,
 	newServers chan *ServerAddedMessage,
 ) *spineTopologyServer {
 	return &spineTopologyServer{
@@ -29,12 +31,24 @@ func NewSpineTopologyServer(topology *model.Topology,
 		vcm:                vcm,
 		failedLeavesToRPC:  failedLeavesToRPC,
 		failedServersToRPC: failedServersToRPC,
+		newLeavesToRPC:     newLeavesToRPC,
 		newServers:         newServers,
 	}
 }
-func (s *spineTopologyServer) AddLeaf(ctx context.Context, leaf *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
-	logrus.Debug("[SpineTopoServer] Adding a leaf")
-	return &horus_pb.HorusResponse{Status: "OK"}, nil
+func (s *spineTopologyServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
+	logrus.Debugf("[SpineTopoServer] Adding a leaf %d to spine %d", leafInfo.Id, leafInfo.SpineID)
+	leaf, err := s.topology.AddLeafToSpine(leafInfo)
+	if err != nil {
+		logrus.Error(err)
+		return &horus_pb.HorusResponse{Status: "FAILED"}, nil
+	}
+	if leaf.Parent != nil {
+		s.newLeavesToRPC <- NewLeafAddedMessage(leafInfo, leaf)
+		return &horus_pb.HorusResponse{Status: "OK"}, nil
+	}
+
+	logrus.Error("[SpineTopoServer] Adding leaf %d failed because it doesn't belong to a spine", leaf.ID)
+	return &horus_pb.HorusResponse{Status: "FAILED"}, nil
 }
 
 func (s *spineTopologyServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {

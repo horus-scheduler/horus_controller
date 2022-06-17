@@ -22,6 +22,7 @@ type CentralRpcEndpoint struct {
 
 	failedLeaves  chan *LeafFailedMessage
 	failedServers chan *ServerFailedMessage
+	newLeaves     chan *LeafAddedMessage
 	newServers    chan *ServerAddedMessage
 
 	topology      *model.Topology
@@ -44,6 +45,7 @@ func NewCentralRpcEndpoint(topoLAddr, vcLAddr string,
 		spineConnPool: connPool,
 		failedLeaves:  make(chan *LeafFailedMessage, DefaultRpcRecvSize),
 		failedServers: make(chan *ServerFailedMessage, DefaultRpcRecvSize),
+		newLeaves:     make(chan *LeafAddedMessage, DefaultRpcRecvSize),
 		newServers:    make(chan *ServerAddedMessage, DefaultRpcRecvSize),
 		doneChan:      make(chan bool, 1),
 	}
@@ -68,7 +70,7 @@ func (s *CentralRpcEndpoint) createTopoListener() error {
 		return err
 	}
 	rpcServer := grpc.NewServer()
-	topoServer := NewCentralTopologyServer(s.topology, s.vcm, s.failedLeaves, s.failedServers, s.newServers)
+	topoServer := NewCentralTopologyServer(s.topology, s.vcm, s.failedLeaves, s.failedServers, s.newLeaves, s.newServers)
 	horus_pb.RegisterHorusTopologyServer(rpcServer, topoServer)
 	return rpcServer.Serve(lis)
 }
@@ -125,6 +127,27 @@ func (s *CentralRpcEndpoint) sendFailedServerEvent(e *horus_pb.ServerInfo, dst *
 	return err
 }
 
+func (s *CentralRpcEndpoint) sendAddLeafEvent(msg *LeafAddedMessage) error {
+	spine := msg.Dst
+	if spine == nil {
+		return errors.New("spine doesn't exist")
+	}
+	pool, ok := s.spineConnPool[spine.ID]
+	if !ok {
+		return errors.New("the pool for spine " + strconv.Itoa(int(spine.ID)) + " doesn't exist")
+	}
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
+		return err
+	}
+	defer conn.Close()
+	logrus.Debugf("[CentralRPC] Sending AddLeaf to spine %d", spine.ID)
+	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	_, err = client.AddLeaf(context.Background(), msg.Leaf)
+	return err
+}
+
 func (s *CentralRpcEndpoint) sendAddServerEvent(msg *ServerAddedMessage) error {
 	spine := msg.Dst
 	if spine == nil {
@@ -162,6 +185,11 @@ func (s *CentralRpcEndpoint) processEvents() {
 				if err != nil {
 					logrus.Error(err)
 				}
+			}
+		case newLeafMsg := <-s.newLeaves:
+			err := s.sendAddLeafEvent(newLeafMsg)
+			if err != nil {
+				logrus.Error(err)
 			}
 		case newServerMsg := <-s.newServers:
 			err := s.sendAddServerEvent(newServerMsg)

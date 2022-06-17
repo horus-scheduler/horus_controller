@@ -11,18 +11,21 @@ import (
 
 type ManagerRpcEndpoint struct {
 	sync.RWMutex
-	mgmtAddress string
-	rpcEgress   chan *LeafFailedMessage
-	doneChan    chan bool
+	mgmtAddress  string
+	failedLeaves chan *LeafFailedMessage
+	newLeaves    chan *LeafAddedMessage
+	doneChan     chan bool
 }
 
 func NewManagerRpcEndpoint(mgmtAddress string,
-	rpcEgress chan *LeafFailedMessage,
+	failedLeaves chan *LeafFailedMessage,
+	newLeaves chan *LeafAddedMessage,
 ) *ManagerRpcEndpoint {
 	return &ManagerRpcEndpoint{
-		mgmtAddress: mgmtAddress,
-		rpcEgress:   rpcEgress,
-		doneChan:    make(chan bool, 1),
+		mgmtAddress:  mgmtAddress,
+		failedLeaves: failedLeaves,
+		newLeaves:    newLeaves,
+		doneChan:     make(chan bool, 1),
 	}
 }
 
@@ -33,55 +36,12 @@ func (s *ManagerRpcEndpoint) createTopoListener() error {
 		return err
 	}
 	rpcServer := grpc.NewServer()
-	topoServer := NewManagerTopologyServer(s.rpcEgress)
+	topoServer := NewManagerTopologyServer(s.failedLeaves, s.newLeaves)
 	horus_pb.RegisterHorusTopologyServer(rpcServer, topoServer)
 	return rpcServer.Serve(lis)
 }
 
-// func (s *ManagerRpcEndpoint) createVCConnPool() {
-// 	s.Lock()
-// 	defer s.Unlock()
-// 	var factory grpcpool.Factory
-// 	factory = func() (*grpc.ClientConn, error) {
-// 		conn, err := grpc.Dial(s.vcAddress, grpc.WithInsecure())
-// 		if err != nil {
-// 			logrus.Error(err)
-// 		}
-// 		return conn, err
-// 	}
-// 	var err error
-// 	s.vcConnPool, err = grpcpool.New(factory, 10, 20, 5*time.Second)
-// 	if err != nil {
-// 		logrus.Error(err)
-// 	}
-// }
-
-// func (s *LeafRpcEndpoint) GetVCs() ([]*horus_pb.VCInfo, error) {
-// 	s.RLock()
-// 	defer s.RUnlock()
-// 	conn, err := s.vcConnPool.Get(context.Background())
-// 	if err != nil {
-// 		logrus.Error(err)
-// 		return nil, err
-// 	}
-// 	defer conn.Close()
-// 	client := horus_pb.NewHorusVCClient(conn.ClientConn)
-// 	resp, err := client.GetVCs(context.Background(), &empty.Empty{})
-// 	return resp.Vcs, err
-// }
-
 func (s *ManagerRpcEndpoint) processEvents() {
-	// for {
-	// 	select {
-	// 	case syncEv := <-s.syncEvents:
-	// 		err := s.sendSyncEvent(syncEv)
-	// 		if err != nil {
-	// 			log.Println(err)
-	// 		}
-	// 	default:
-	// 		continue
-	// 	}
-	// }
 }
 
 func (s *ManagerRpcEndpoint) Start() {

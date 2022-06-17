@@ -100,11 +100,53 @@ func (s *Topology) GetNodeByAddress(nodeAddress string, nodeType NodeType) *Node
 	return nil
 }
 
+func (s *Topology) AddLeafToSpine(leafInfo *horus_pb.LeafInfo) (*Node, error) {
+	spineID := uint16(leafInfo.SpineID)
+	leafID := uint16(leafInfo.Id)
+	spine := s.GetNode(spineID, NodeType_Spine)
+	leaf := s.GetNode(leafID, NodeType_Leaf)
+	// Sanity check
+	// 1. Spine exists
+	// 2. Leaf doesn't exist
+	// 3. If mgmtAddress exists, ensures that no other leaf has the same RPC address
+	if spine == nil {
+		return nil, errors.New("spine " + strconv.Itoa(int(spineID)) + " doesn't exist")
+	}
+	if leaf != nil {
+		if leaf.Parent == spine {
+			logrus.Warnf("[Topology] Leaf %d already exists", leaf.ID)
+			return nil, errors.New("leaf " + strconv.Itoa(int(leafID)) + " already exists")
+		} else {
+			return nil, errors.New("leaf " + strconv.Itoa(int(leafID)) + " already exists with mismatched spine")
+		}
+	}
+
+	for _, otherLeaf := range spine.Children {
+		if otherLeaf.MgmtAddress == leafInfo.MgmtAddress {
+			if otherLeaf.Address == leafInfo.Address {
+				return nil, errors.New("leaf address (" + leafInfo.Address + ") is already being used in the manager: " + leafInfo.MgmtAddress)
+			}
+		}
+	}
+
+	// All checks passed.
+	leaf = NewNode(leafInfo.Address, leafInfo.MgmtAddress, leafID, 0, NodeType_Leaf)
+	leaf.Parent = spine
+	spine.Lock()
+	spine.Children = append(spine.Children, leaf)
+	spine.Unlock()
+	leaf.FirstWorkerID = 0
+	leaf.LastWorkerID = 0
+	s.Leaves.Store(leaf.ID, leaf)
+
+	return leaf, nil
+}
+
 func (s *Topology) AddServerToLeaf(serverInfo *horus_pb.ServerInfo, leafID uint16) (*Node, error) {
 	leaf := s.GetNode(leafID, NodeType_Leaf)
 	existingServer := s.GetNode(uint16(serverInfo.Id), NodeType_Server)
 	if leaf == nil {
-		return nil, errors.New("leaf " + strconv.Itoa(int(leafID)) + " doesn't exist!")
+		return nil, errors.New("leaf " + strconv.Itoa(int(leafID)) + " doesn't exist")
 	}
 	if existingServer != nil {
 		if existingServer.Parent == leaf {
@@ -120,7 +162,11 @@ func (s *Topology) AddServerToLeaf(serverInfo *horus_pb.ServerInfo, leafID uint1
 	server := NewNode(serverInfo.Address, "", uint16(serverInfo.Id), uint16(serverInfo.PortId), NodeType_Server)
 	server.Parent = leaf
 	leaf.Children = append(leaf.Children, server)
-	workerID := leaf.LastWorkerID + 1
+	leaf.FirstWorkerID = 0
+	var workerID uint16 = 0
+	if leaf.LastWorkerID > 0 {
+		workerID = leaf.LastWorkerID + 1
+	}
 	server.FirstWorkerID = workerID
 	workerID += uint16(serverInfo.WorkersCount)
 	server.LastWorkerID = workerID - 1
@@ -222,6 +268,7 @@ func (s *Topology) Debug() {
 			break
 		}
 		node, stack = stack[len(stack)-1], stack[:len(stack)-1]
+		node.RLock()
 		if node.Type == NodeType_Spine {
 			logrus.Debug("- Spine: ", node.ID)
 		} else if node.Type == NodeType_Leaf {
@@ -232,5 +279,6 @@ func (s *Topology) Debug() {
 		for i := len(node.Children) - 1; i >= 0; i-- {
 			stack = append(stack, node.Children[i])
 		}
+		node.RUnlock()
 	}
 }

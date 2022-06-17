@@ -3,12 +3,12 @@ package ctrl_sw
 import (
 	"time"
 
+	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
 	horus_net "github.com/khaledmdiab/horus_controller/core/net"
+	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
-
-	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 )
 
 type controller struct {
@@ -47,10 +47,25 @@ type spineController struct {
 	healthMgr   *core.LeafHealthManager     // Tracking the health of downstream nodes
 }
 
-func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig) *leafController {
+type TopologyOption func(*model.Topology) error
+
+func WithExtraLeaf(leafInfo *horus_pb.LeafInfo) TopologyOption {
+	return func(topo *model.Topology) error {
+		_, err := topo.AddLeafToSpine(leafInfo)
+		return err
+	}
+}
+
+func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig, opts ...TopologyOption) *leafController {
 	topoCfg := model.ReadTopologyFile(topoFp)
 	topology := model.NewDCNTopology(topoCfg)
 	vcm := core.NewVCManager(topology)
+	for _, opt := range opts {
+		err := opt(topology)
+		if err != nil {
+			logrus.Error(err)
+		}
+	}
 
 	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
 	asicIngress := make(chan []byte, horus_net.DefaultUnixSockRecvSize)
@@ -80,7 +95,7 @@ func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig) *leafContr
 		newServersRPC)
 
 	ch := NewLeafBusChan(hmEgress, updatedServersRPC, newServersRPC, asicIngress, asicEgress)
-	bus := NewLeafBus(ch, healthMgr, topology, bfrt)
+	bus := NewLeafBus(ctrlID, ch, healthMgr, topology, bfrt)
 	return &leafController{
 		rpcEndPoint: rpcEndPoint,
 		healthMgr:   healthMgr,
@@ -107,6 +122,7 @@ func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineCon
 	activeNode := make(chan *core.LeafHealthMsg, horus_net.DefaultUnixSockRecvSize)
 	failedLeaves := make(chan *horus_net.LeafFailedMessage, horus_net.DefaultRpcRecvSize)
 	failedServers := make(chan *horus_net.ServerFailedMessage, horus_net.DefaultRpcRecvSize)
+	newLeaves := make(chan *horus_net.LeafAddedMessage, horus_net.DefaultRpcRecvSize)
 	newServers := make(chan *horus_net.ServerAddedMessage, horus_net.DefaultRpcRecvSize)
 
 	spine := topology.GetNode(ctrlID, model.NodeType_Spine)
@@ -114,9 +130,9 @@ func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineCon
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(spine.ID), target)
 
 	rpcEndPoint := horus_net.NewSpineRpcEndpoint(spine.Address, cfg.VCServer,
-		topology, vcm, failedLeaves, failedServers, newServers)
-	ch := NewSpineBusChan(activeNode, failedLeaves, failedServers, newServers, asicIngress, asicEgress)
-	bus := NewSpineBus(ch, topology, nil, bfrt)
+		topology, vcm, failedLeaves, failedServers, newLeaves, newServers)
+	ch := NewSpineBusChan(activeNode, failedLeaves, failedServers, newLeaves, newServers, asicIngress, asicEgress)
+	bus := NewSpineBus(ctrlID, ch, topology, nil, bfrt)
 	return &spineController{
 		rpcEndPoint: rpcEndPoint,
 		healthMgr:   nil,
