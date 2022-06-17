@@ -1,11 +1,13 @@
 package net
 
 import (
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 	context "golang.org/x/net/context"
+	"google.golang.org/grpc/peer"
 )
 
 type LeafFailedMessage struct {
@@ -44,8 +46,8 @@ func NewLeafAddedMessage(leaf *horus_pb.LeafInfo, dst *model.Node) *LeafAddedMes
 	return &LeafAddedMessage{Leaf: leaf, Dst: dst}
 }
 
-type centralTopologyServer struct {
-	horus_pb.UnimplementedHorusTopologyServer
+type centralSrvServer struct {
+	horus_pb.UnimplementedHorusServiceServer
 
 	failedLeaves  chan *LeafFailedMessage
 	failedServers chan *ServerFailedMessage
@@ -55,14 +57,14 @@ type centralTopologyServer struct {
 	vcm           *core.VCManager
 }
 
-func NewCentralTopologyServer(topology *model.Topology,
+func NewCentralSrvServer(topology *model.Topology,
 	vcm *core.VCManager,
 	failedLeaves chan *LeafFailedMessage,
 	failedServers chan *ServerFailedMessage,
 	newLeaves chan *LeafAddedMessage,
 	newServers chan *ServerAddedMessage,
-) *centralTopologyServer {
-	return &centralTopologyServer{
+) *centralSrvServer {
+	return &centralSrvServer{
 		topology:      topology,
 		vcm:           vcm,
 		failedLeaves:  failedLeaves,
@@ -71,7 +73,7 @@ func NewCentralTopologyServer(topology *model.Topology,
 		newServers:    newServers,
 	}
 }
-func (s *centralTopologyServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
+func (s *centralSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	logrus.Debugf("[CentralTopoServer] Adding a leaf %d to spine %d", leafInfo.Id, leafInfo.SpineID)
 	leaf, err := s.topology.AddLeafToSpine(leafInfo)
 	if err != nil {
@@ -88,7 +90,7 @@ func (s *centralTopologyServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.
 	return &horus_pb.HorusResponse{Status: "FAILED"}, nil
 }
 
-func (s *centralTopologyServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
+func (s *centralSrvServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	leafID := uint16(leafInfo.Id)
 	logrus.Debugf("[CentralTopoServer] Failing a leaf %d", leafID)
 	leaf := s.topology.GetNode(leafID, model.NodeType_Leaf)
@@ -130,7 +132,7 @@ func (s *centralTopologyServer) FailLeaf(ctx context.Context, leafInfo *horus_pb
 	return &horus_pb.HorusResponse{Status: "FAILD"}, nil
 }
 
-func (s *centralTopologyServer) AddServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
+func (s *centralSrvServer) AddServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
 	logrus.Debugf("[CentralTopoServer] Adding a server %d", serverInfo.Id)
 	server, err := s.topology.AddServerToLeaf(serverInfo, uint16(serverInfo.LeafID))
 	if err != nil {
@@ -153,7 +155,7 @@ func (s *centralTopologyServer) AddServer(ctx context.Context, serverInfo *horus
 	return &horus_pb.HorusResponse{Status: "FAILED"}, nil
 }
 
-func (s *centralTopologyServer) FailServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
+func (s *centralSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
 	serverID := uint16(serverInfo.Id)
 	logrus.Debugf("[CentralTopoServer] Failing a server %d", serverID)
 	server := s.topology.GetNode(serverID, model.NodeType_Server)
@@ -190,5 +192,34 @@ func (s *centralTopologyServer) FailServer(ctx context.Context, serverInfo *horu
 		s.failedServers <- NewServerFailedMessage(serverInfo, spines)
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}
+	return &horus_pb.HorusResponse{Status: "OK"}, nil
+}
+
+func (v *centralSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
+	p, _ := peer.FromContext(ctx)
+	logrus.Debugf("[CentralVCServer] GetVCs() called by %s", p.Addr.String())
+	vcs := v.vcm.GetVCs()
+	rsp := &horus_pb.VCsResponse{}
+	for _, vc := range vcs {
+		vcInfo := &horus_pb.VCInfo{}
+		vcInfo.Id = uint32(vc.ClusterID)
+		for _, server := range vc.Servers.Internal() {
+			serverInfo := &horus_pb.VCServerInfo{}
+			serverInfo.Id = uint32(server.ID)
+			vcInfo.Servers = append(vcInfo.Servers, serverInfo)
+		}
+		for _, spine := range vc.Spines.Internal() {
+			vcInfo.Spines = append(vcInfo.Spines, uint32(spine.ID))
+		}
+		rsp.Vcs = append(rsp.Vcs, vcInfo)
+	}
+	return rsp, nil
+}
+
+func (v *centralSrvServer) AddVC(context.Context, *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+	return &horus_pb.HorusResponse{Status: "OK"}, nil
+}
+
+func (v *centralSrvServer) RemoveVC(context.Context, *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
 	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }

@@ -1,4 +1,4 @@
-package ctrl_sw
+package ctrl_mgr
 
 import (
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"

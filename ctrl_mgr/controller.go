@@ -1,4 +1,4 @@
-package ctrl_sw
+package ctrl_mgr
 
 import (
 	"time"
@@ -86,9 +86,8 @@ func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig, opts ...To
 		logrus.Fatal("[Leaf] Leaf %d doesn't exist in the topology", ctrlID)
 	}
 
-	rpcEndPoint := horus_net.NewLeafRpcEndpoint(cfg.TopoServer,
-		cfg.VCServer,
-		leaf.Address,
+	rpcEndPoint := horus_net.NewLeafRpcEndpoint(leaf.Address,
+		cfg.RemoteSrvServer,
 		topology,
 		vcm,
 		updatedServersRPC,
@@ -129,7 +128,7 @@ func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineCon
 	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(spine.ID), target)
 
-	rpcEndPoint := horus_net.NewSpineRpcEndpoint(spine.Address, cfg.VCServer,
+	rpcEndPoint := horus_net.NewSpineRpcEndpoint(spine.Address, cfg.RemoteSrvServer,
 		topology, vcm, failedLeaves, failedServers, newLeaves, newServers)
 	ch := NewSpineBusChan(activeNode, failedLeaves, failedServers, newLeaves, newServers, asicIngress, asicEgress)
 	bus := NewSpineBus(ctrlID, ch, topology, nil, bfrt)
@@ -160,11 +159,11 @@ func (c *leafController) Start() {
 	c.controller.Start()
 
 	go c.rpcEndPoint.Start()
-	logrus.Debugf("[Leaf] Fetching all VCs from %s", c.rpcEndPoint.VCAddress)
+	logrus.Debugf("[Leaf] Fetching all VCs from %s", c.rpcEndPoint.SrvCentralAddr)
 	time.Sleep(time.Second)
 	vcs, err := c.rpcEndPoint.GetVCs()
 	if len(vcs) == 0 {
-		logrus.Warnf("[Leaf] No VCs were fetched from %s", c.rpcEndPoint.VCAddress)
+		logrus.Warnf("[Leaf] No VCs were fetched from %s", c.rpcEndPoint.SrvCentralAddr)
 	} else {
 		logrus.Debugf("[Leaf] %d VCs were fetched", len(vcs))
 	}
@@ -198,11 +197,11 @@ func (c *spineController) Start() {
 		Infof("[Spine] Starting spine switch controller")
 	c.controller.Start()
 	go c.rpcEndPoint.Start()
-	logrus.Debugf("[Spine] Fetching all VCs from %s", c.rpcEndPoint.VCAddress)
+	logrus.Debugf("[Spine] Fetching all VCs from %s", c.rpcEndPoint.SrvCentralAddr)
 	time.Sleep(time.Second)
 	vcs, err := c.rpcEndPoint.GetVCs()
 	if len(vcs) == 0 {
-		logrus.Warnf("[Spine] No VCs were fetched from %s", c.rpcEndPoint.VCAddress)
+		logrus.Warnf("[Spine] No VCs were fetched from %s", c.rpcEndPoint.SrvCentralAddr)
 	} else {
 		logrus.Debugf("[Spine] %d VCs were fetched", len(vcs))
 	}

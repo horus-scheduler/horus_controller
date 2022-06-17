@@ -9,9 +9,9 @@ import (
 )
 
 type BinRootConfig struct {
-	TopoServer string
-	VCServer   string
-	LogLevel   string
+	SrvServer string
+	// VCServer   string
+	LogLevel string
 }
 
 type topoRootConfig struct {
@@ -64,10 +64,8 @@ func ReadConfigFile(configName string, configPaths ...string) *BinRootConfig {
 		log.Fatalf("Fatal error config file: %s \n", err)
 	}
 	cfg := &BinRootConfig{}
-	cfg.TopoServer = viper.GetString("rpc.servers.topoAddress")
-	cfg.VCServer = viper.GetString("rpc.servers.vcAddress")
+	cfg.SrvServer = viper.GetString("server.srvAddress")
 	cfg.LogLevel = viper.GetString("log.level")
-	// cfg.TorAddresses = viper.GetStringSlice("tors.addresses")
 
 	return cfg
 }

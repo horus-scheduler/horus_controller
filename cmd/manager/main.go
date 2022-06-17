@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	ctrl_sw "github.com/khaledmdiab/horus_controller/ctrl_sw"
+	ctrl_mgr "github.com/khaledmdiab/horus_controller/ctrl_mgr"
 	"github.com/sirupsen/logrus"
 )
 
@@ -23,6 +23,6 @@ func main() {
 		logrus.Warn("Manager configuration file path is empty")
 	}
 
-	cc := ctrl_sw.NewSwitchManager(topoFp, cfgFp)
+	cc := ctrl_mgr.NewSwitchManager(topoFp, cfgFp)
 	cc.Run()
 }

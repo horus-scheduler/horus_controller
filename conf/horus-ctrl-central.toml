@@ -6,8 +6,5 @@ title = "Horus centralizer controller"
 [log]
 level = "debug"
 
-[rpc]
-  [rpc.servers]
-      # communicating with switch controllers via gRPC
-      topoAddress = "0.0.0.0:4001"
-      vcAddress = "0.0.0.0:4101"
+[server]
+    srvAddress = "0.0.0.0:4001"

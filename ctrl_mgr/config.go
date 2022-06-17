@@ -1,4 +1,4 @@
-package ctrl_sw
+package ctrl_mgr
 
 import (
 	"log"
@@ -16,10 +16,10 @@ type bfrtContext struct {
 
 type rootConfig struct {
 	bfrtContext
-	LogLevel    string
-	AsicIntf    string
-	TopoServer  string
-	VCServer    string
+	LogLevel        string
+	AsicIntf        string
+	RemoteSrvServer string
+	// VCServer    string
 	MgmtAddress string
 	SpineIDs    []uint16
 	LeafIDs     []uint16
@@ -54,8 +54,7 @@ func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
 	cfg.DeviceID = viper.GetUint32("asic.device_id")
 	cfg.PipeID = viper.GetUint32("asic.pipe_id")
 	cfg.BfrtAddress = viper.GetString("bfrt.address")
-	cfg.TopoServer = viper.GetString("centralized.address")
-	cfg.VCServer = viper.GetString("centralized.vcAddress")
+	cfg.RemoteSrvServer = viper.GetString("centralized.srvAddress")
 	cfg.Timeout = viper.GetInt64("controllers.timeout")
 	cfg.MgmtAddress = viper.GetString("controllers.mgmtAddress")
 	cfg.LogLevel = viper.GetString("log.level")

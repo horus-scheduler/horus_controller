@@ -1,6 +1,7 @@
 package net
 
 import (
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
@@ -8,8 +9,8 @@ import (
 	context "golang.org/x/net/context"
 )
 
-type spineTopologyServer struct {
-	horus_pb.UnimplementedHorusTopologyServer
+type spineSrvServer struct {
+	horus_pb.UnimplementedHorusServiceServer
 
 	failedLeavesToRPC  chan *LeafFailedMessage
 	failedServersToRPC chan *ServerFailedMessage
@@ -19,14 +20,14 @@ type spineTopologyServer struct {
 	vcm                *core.VCManager
 }
 
-func NewSpineTopologyServer(topology *model.Topology,
+func NewSpineSrvServer(topology *model.Topology,
 	vcm *core.VCManager,
 	failedLeavesToRPC chan *LeafFailedMessage,
 	failedServersToRPC chan *ServerFailedMessage,
 	newLeavesToRPC chan *LeafAddedMessage,
 	newServers chan *ServerAddedMessage,
-) *spineTopologyServer {
-	return &spineTopologyServer{
+) *spineSrvServer {
+	return &spineSrvServer{
 		topology:           topology,
 		vcm:                vcm,
 		failedLeavesToRPC:  failedLeavesToRPC,
@@ -35,7 +36,7 @@ func NewSpineTopologyServer(topology *model.Topology,
 		newServers:         newServers,
 	}
 }
-func (s *spineTopologyServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
+func (s *spineSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	logrus.Debugf("[SpineTopoServer] Adding a leaf %d to spine %d", leafInfo.Id, leafInfo.SpineID)
 	leaf, err := s.topology.AddLeafToSpine(leafInfo)
 	if err != nil {
@@ -51,7 +52,7 @@ func (s *spineTopologyServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.Le
 	return &horus_pb.HorusResponse{Status: "FAILED"}, nil
 }
 
-func (s *spineTopologyServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
+func (s *spineSrvServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	leafID := uint16(leafInfo.Id)
 	leaf := s.topology.GetNode(leafID, model.NodeType_Leaf)
 	if leaf == nil {
@@ -70,7 +71,7 @@ func (s *spineTopologyServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.L
 	return &horus_pb.HorusResponse{Status: "FAILD"}, nil
 }
 
-func (s *spineTopologyServer) AddServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
+func (s *spineSrvServer) AddServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
 	logrus.Debugf("[SpineTopoServer] Adding a server %d at Spine", serverInfo.Id)
 	server, err := s.topology.AddServerToLeaf(serverInfo, uint16(serverInfo.LeafID))
 	if err != nil {
@@ -93,7 +94,7 @@ func (s *spineTopologyServer) AddServer(ctx context.Context, serverInfo *horus_p
 	return &horus_pb.HorusResponse{Status: "FAILED"}, nil
 }
 
-func (s *spineTopologyServer) FailServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
+func (s *spineSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
 	serverID := uint16(serverInfo.Id)
 	server := s.topology.GetNode(serverID, model.NodeType_Server)
 	if server == nil {
@@ -110,4 +111,16 @@ func (s *spineTopologyServer) FailServer(ctx context.Context, serverInfo *horus_
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}
 	return &horus_pb.HorusResponse{Status: "FAILD"}, nil
+}
+
+func (v *spineSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
+	return &horus_pb.VCsResponse{}, nil
+}
+
+func (v *spineSrvServer) AddVC(context.Context, *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+	return &horus_pb.HorusResponse{Status: "OK"}, nil
+}
+
+func (v *spineSrvServer) RemoveVC(context.Context, *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }

@@ -17,8 +17,8 @@ import (
 )
 
 type CentralRpcEndpoint struct {
-	vcLAddr   string
-	topoLAddr string
+	// vcLAddr   string
+	srvLAddr string
 
 	failedLeaves  chan *LeafFailedMessage
 	failedServers chan *ServerFailedMessage
@@ -32,14 +32,13 @@ type CentralRpcEndpoint struct {
 	doneChan chan bool
 }
 
-func NewCentralRpcEndpoint(topoLAddr, vcLAddr string,
+func NewCentralRpcEndpoint(srvLAddr string,
 	topology *model.Topology,
 	vcm *core.VCManager,
 ) *CentralRpcEndpoint {
 	connPool := make(map[uint16]*grpcpool.Pool)
 	return &CentralRpcEndpoint{
-		topoLAddr:     topoLAddr,
-		vcLAddr:       vcLAddr,
+		srvLAddr:      srvLAddr,
 		topology:      topology,
 		vcm:           vcm,
 		spineConnPool: connPool,
@@ -51,27 +50,15 @@ func NewCentralRpcEndpoint(topoLAddr, vcLAddr string,
 	}
 }
 
-func (s *CentralRpcEndpoint) createVCListener() error {
-	lis, err := net.Listen("tcp4", s.vcLAddr)
+func (s *CentralRpcEndpoint) createServiceListener() error {
+	lis, err := net.Listen("tcp4", s.srvLAddr)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
 	rpcServer := grpc.NewServer()
-	vcServer := NewCentralVCServer(s.vcm)
-	horus_pb.RegisterHorusVCServer(rpcServer, vcServer)
-	return rpcServer.Serve(lis)
-}
-
-func (s *CentralRpcEndpoint) createTopoListener() error {
-	lis, err := net.Listen("tcp4", s.topoLAddr)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	rpcServer := grpc.NewServer()
-	topoServer := NewCentralTopologyServer(s.topology, s.vcm, s.failedLeaves, s.failedServers, s.newLeaves, s.newServers)
-	horus_pb.RegisterHorusTopologyServer(rpcServer, topoServer)
+	topoServer := NewCentralSrvServer(s.topology, s.vcm, s.failedLeaves, s.failedServers, s.newLeaves, s.newServers)
+	horus_pb.RegisterHorusServiceServer(rpcServer, topoServer)
 	return rpcServer.Serve(lis)
 }
 
@@ -105,7 +92,7 @@ func (s *CentralRpcEndpoint) sendFailedLeafEvent(e *horus_pb.LeafInfo, dst *mode
 	}
 	defer conn.Close()
 	logrus.Debugf("[CentralRPC] Sending FailLeaf to Spine: %d", dst.ID)
-	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	_, err = client.FailLeaf(context.Background(), e)
 	return err
 }
@@ -122,7 +109,7 @@ func (s *CentralRpcEndpoint) sendFailedServerEvent(e *horus_pb.ServerInfo, dst *
 	}
 	defer conn.Close()
 	logrus.Debugf("[CentralRPC] Sending FailServer to Spine: %d", dst.ID)
-	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	_, err = client.FailServer(context.Background(), e)
 	return err
 }
@@ -143,7 +130,7 @@ func (s *CentralRpcEndpoint) sendAddLeafEvent(msg *LeafAddedMessage) error {
 	}
 	defer conn.Close()
 	logrus.Debugf("[CentralRPC] Sending AddLeaf to spine %d", spine.ID)
-	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	_, err = client.AddLeaf(context.Background(), msg.Leaf)
 	return err
 }
@@ -164,7 +151,7 @@ func (s *CentralRpcEndpoint) sendAddServerEvent(msg *ServerAddedMessage) error {
 	}
 	defer conn.Close()
 	logrus.Debugf("[CentralRPC] Sending AddServer to Spine %d", spine.ID)
-	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	_, err = client.AddServer(context.Background(), msg.Server)
 	return err
 }
@@ -212,8 +199,7 @@ func (s *CentralRpcEndpoint) Start() {
 	}
 
 	// creates the end point servers for both App and ToR
-	go s.createTopoListener()
-	go s.createVCListener()
+	go s.createServiceListener()
 
 	// Let's send any outstanding events
 	go s.processEvents()

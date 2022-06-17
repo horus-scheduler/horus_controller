@@ -39,14 +39,12 @@ message ServerInfo {
     uint32 leafID = 5;
 }
 
-service HorusTopology {
+service HorusService {
     rpc AddLeaf(LeafInfo) returns (HorusResponse) {}
     rpc FailLeaf(LeafInfo) returns (HorusResponse) {}
     rpc AddServer(ServerInfo) returns (HorusResponse) {}
     rpc FailServer(ServerInfo) returns (HorusResponse) {}
-}
 
-service HorusVC {
     rpc GetVCs(google.protobuf.Empty) returns (VCsResponse) {}
     rpc AddVC(VCInfo) returns (HorusResponse) {}
     rpc RemoveVC(VCInfo) returns (HorusResponse) {}

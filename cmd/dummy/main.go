@@ -19,7 +19,7 @@ func failLeaf(pool *grpcpool.Pool, leafID uint32) {
 	}
 	defer conn.Close()
 
-	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	leafInfo := &horus_pb.LeafInfo{Id: leafID, SpineID: 0}
 
 	resp, _ := client.FailLeaf(context.Background(), leafInfo)
@@ -33,7 +33,7 @@ func failServer(pool *grpcpool.Pool, serverID uint32) {
 	}
 	defer conn.Close()
 
-	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	serverInfo := &horus_pb.ServerInfo{Id: serverID}
 
 	resp, _ := client.FailServer(context.Background(), serverInfo)
@@ -50,7 +50,7 @@ func addLeaf(pool *grpcpool.Pool,
 	}
 	defer conn.Close()
 
-	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	leafInfo := &horus_pb.LeafInfo{
 		Id:          leafID,
 		SpineID:     spineID,
@@ -73,7 +73,7 @@ func addServer(pool *grpcpool.Pool,
 	}
 	defer conn.Close()
 
-	client := horus_pb.NewHorusTopologyClient(conn.ClientConn)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	serverInfo := &horus_pb.ServerInfo{
 		Id:           serverID,
 		PortId:       portID,
@@ -93,7 +93,7 @@ func getVCs(pool *grpcpool.Pool) {
 	}
 	defer conn.Close()
 
-	client := horus_pb.NewHorusVCClient(conn.ClientConn)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	resp, _ := client.GetVCs(context.Background(), &empty.Empty{})
 	for _, v := range resp.Vcs {
 		logrus.Info(v.Id)
@@ -105,8 +105,8 @@ func getVCs(pool *grpcpool.Pool) {
 	}
 }
 
-func createTopoPool() *grpcpool.Pool {
-	topoFactory := func() (*grpc.ClientConn, error) {
+func createPool() *grpcpool.Pool {
+	factory := func() (*grpc.ClientConn, error) {
 		conn, err := grpc.Dial("0.0.0.0:4001", grpc.WithInsecure())
 		if err != nil {
 			log.Println(err)
@@ -114,32 +114,17 @@ func createTopoPool() *grpcpool.Pool {
 		return conn, err
 	}
 	var err error
-	topoPool, err := grpcpool.New(topoFactory, 2, 6, 5*time.Second)
+	pool, err := grpcpool.New(factory, 2, 6, 5*time.Second)
 	if err != nil {
 		log.Println(err)
 	}
 
-	return topoPool
-}
-
-func createVCPool() *grpcpool.Pool {
-	vcFactory := func() (*grpc.ClientConn, error) {
-		conn, err := grpc.Dial("0.0.0.0:4101", grpc.WithInsecure())
-		if err != nil {
-			log.Println(err)
-		}
-		return conn, err
-	}
-	vcPool, err := grpcpool.New(vcFactory, 2, 6, 5*time.Second)
-	if err != nil {
-		log.Println(err)
-	}
-	return vcPool
+	return pool
 }
 
 func main() {
 
-	topoPool := createTopoPool()
+	topoPool := createPool()
 	// logrus.Info("Failing server 0")
 	// failServer(topoPool, 0)
 	// time.Sleep(time.Second)

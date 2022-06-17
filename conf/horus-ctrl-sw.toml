@@ -14,8 +14,7 @@ level = "debug"
 
 # used by spine and/or leaf switches
 [centralized]
-    topoAddress = "0.0.0.0:4001"
-    vcAddress = "0.0.0.0:4101"
+    srvAddress = "0.0.0.0:4001"
 
 # used by spine and leaf switches
 [bfrt]

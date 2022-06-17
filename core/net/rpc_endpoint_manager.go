@@ -11,33 +11,33 @@ import (
 
 type ManagerRpcEndpoint struct {
 	sync.RWMutex
-	mgmtAddress  string
+	srvLAddress  string
 	failedLeaves chan *LeafFailedMessage
 	newLeaves    chan *LeafAddedMessage
 	doneChan     chan bool
 }
 
-func NewManagerRpcEndpoint(mgmtAddress string,
+func NewManagerRpcEndpoint(srvLAddress string,
 	failedLeaves chan *LeafFailedMessage,
 	newLeaves chan *LeafAddedMessage,
 ) *ManagerRpcEndpoint {
 	return &ManagerRpcEndpoint{
-		mgmtAddress:  mgmtAddress,
+		srvLAddress:  srvLAddress,
 		failedLeaves: failedLeaves,
 		newLeaves:    newLeaves,
 		doneChan:     make(chan bool, 1),
 	}
 }
 
-func (s *ManagerRpcEndpoint) createTopoListener() error {
-	lis, err := net.Listen("tcp4", s.mgmtAddress)
+func (s *ManagerRpcEndpoint) createServiceListener() error {
+	lis, err := net.Listen("tcp4", s.srvLAddress)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
 	rpcServer := grpc.NewServer()
-	topoServer := NewManagerTopologyServer(s.failedLeaves, s.newLeaves)
-	horus_pb.RegisterHorusTopologyServer(rpcServer, topoServer)
+	topoServer := NewManagerSrvServer(s.failedLeaves, s.newLeaves)
+	horus_pb.RegisterHorusServiceServer(rpcServer, topoServer)
 	return rpcServer.Serve(lis)
 }
 
@@ -46,7 +46,7 @@ func (s *ManagerRpcEndpoint) processEvents() {
 
 func (s *ManagerRpcEndpoint) Start() {
 	// creates the end point server
-	go s.createTopoListener()
+	go s.createServiceListener()
 
 	// Let's send any outstanding events
 	go s.processEvents()

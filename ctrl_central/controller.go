@@ -50,7 +50,7 @@ func NewCentralController(opts ...CentralControllerOption) *centralController {
 
 	logrus.Debug("[Central] Topology and VC Manager are initialized")
 
-	rpcEndPoint := net.NewCentralRpcEndpoint(binCfg.TopoServer, binCfg.VCServer, topology, vcm)
+	rpcEndPoint := net.NewCentralRpcEndpoint(binCfg.SrvServer, topology, vcm)
 	bus := NewCentralBus(topology, vcm, NewCentralBusChan())
 
 	s := &centralController{
