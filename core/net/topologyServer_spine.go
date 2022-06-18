@@ -1,6 +1,8 @@
 package net
 
 import (
+	"fmt"
+
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
@@ -140,6 +142,21 @@ func (s *spineSrvServer) AddVC(ctx context.Context, vcInfo *horus_pb.VCInfo) (*h
 	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }
 
-func (v *spineSrvServer) RemoveVC(context.Context, *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+func (s *spineSrvServer) RemoveVC(ctx context.Context, vcInfo *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+	clusterID := uint16(vcInfo.Id)
+	logrus.Debugf("[SpineServer] Removing VC: %d", clusterID)
+
+	vc := s.vcm.GetVC(clusterID)
+	if vc == nil {
+		logrus.Warnf("[SpineServer] Removing VC: %d failed: doesn't exist", clusterID)
+		return nil, fmt.Errorf("VC %d doesn't exist", clusterID)
+	}
+	var leaves []*model.Node
+	for _, leaf := range vc.Leaves.Internal() {
+		leaves = append(leaves, leaf)
+	}
+
+	s.vcm.RemoveVC(vc)
+	s.newVCs <- NewVCUpdatedMessage(vcInfo, VCUpdateRem, leaves)
 	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }

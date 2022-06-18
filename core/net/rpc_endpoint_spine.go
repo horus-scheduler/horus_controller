@@ -266,7 +266,7 @@ func (s *SpineRpcEndpoint) sendServerAdded(newServer *ServerAddedMessage) error 
 	return errors.New("added server doesn't exist")
 }
 
-func (s *SpineRpcEndpoint) sendAddVCToLeaf(vcInfo *horus_pb.VCInfo, leaf *model.Node) error {
+func (s *SpineRpcEndpoint) sendAddVCToLeaf(vcInfo *horus_pb.VCInfo, vcType VCUpdateType, leaf *model.Node) error {
 	if leaf == nil {
 		return errors.New("leaf doesn't exist")
 	}
@@ -283,9 +283,15 @@ func (s *SpineRpcEndpoint) sendAddVCToLeaf(vcInfo *horus_pb.VCInfo, leaf *model.
 	}
 	defer conn.Close()
 
-	logrus.Debugf("[SpineRPC] Sending AddVC to Leaf %d", leaf.ID)
 	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
-	_, err = client.AddVC(context.Background(), vcInfo)
+
+	if vcType == VCUpdateAdd {
+		logrus.Debugf("[SpineRPC] Sending AddVC to Leaf %d", leaf.ID)
+		_, err = client.AddVC(context.Background(), vcInfo)
+	} else if vcType == VCUpdateRem {
+		logrus.Debugf("[SpineRPC] Sending RemoveVC to Leaf %d", leaf.ID)
+		_, err = client.RemoveVC(context.Background(), vcInfo)
+	}
 	return err
 }
 
@@ -294,8 +300,8 @@ func (s *SpineRpcEndpoint) broadcastAddVCToLeaves(msg *VCUpdatedMessage) error {
 	if len(leaves) == 0 {
 		return errors.New("leaves don't exist")
 	}
-	for _, spine := range leaves {
-		err := s.sendAddVCToLeaf(msg.VCInfo, spine)
+	for _, leaf := range leaves {
+		err := s.sendAddVCToLeaf(msg.VCInfo, msg.Type, leaf)
 		if err != nil {
 			return err
 		}
@@ -348,7 +354,11 @@ func (s *SpineRpcEndpoint) processEvents() {
 			if err != nil {
 				logrus.Error(err)
 			}
-			logrus.Debugf("[SpineRPC] Send added VC %d to newVCsEgExt", newVC.VCInfo.Id)
+			if newVC.Type == VCUpdateAdd {
+				logrus.Debugf("[SpineRPC] Send added VC %d to newVCsEgExt", newVC.VCInfo.Id)
+			} else if newVC.Type == VCUpdateRem {
+				logrus.Debugf("[SpineRPC] Send removed VC %d to newVCsEgExt", newVC.VCInfo.Id)
+			}
 			s.newVCsEgExt <- NewVCUpdatedMessage(newVC.VCInfo, newVC.Type, newVC.Dsts)
 		default:
 			continue

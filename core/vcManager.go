@@ -77,6 +77,12 @@ func (rm *vcListMap) AppendToVCList(key uint16, vc *model.VirtualCluster) {
 	rm.Unlock()
 }
 
+func (rm *vcListMap) Internal() map[uint16][]*model.VirtualCluster {
+	rm.Lock()
+	defer rm.Unlock()
+	return rm.internal
+}
+
 func (rm *vcListMap) RemoveFromVCList(key uint16, vc *model.VirtualCluster) {
 	rm.Lock()
 	defer rm.Unlock()
@@ -127,6 +133,13 @@ func (vcm *VCManager) GetVCs() []*model.VirtualCluster {
 	return vcs
 }
 
+func (vcm *VCManager) GetVC(clusterID uint16) *model.VirtualCluster {
+	if vc, ok := vcm.vcs.Load(clusterID); ok {
+		return vc
+	}
+	return nil
+}
+
 // Does not (and shouldn't) modify the topology
 func (vcm *VCManager) AddVC(vc *model.VirtualCluster) (bool, error) {
 	// If the `vc` was created using NewVC(), then it's guaranteed that spines, leaves, and servers exist.
@@ -153,8 +166,12 @@ func (vcm *VCManager) AddVC(vc *model.VirtualCluster) (bool, error) {
 }
 
 // Does not (and shouldn't) modify the topology
-func (vcm *VCManager) RemoveVC(vc *model.VirtualCluster) {
-	logrus.Debug("Removing VC: ", vc.ClusterID, "...")
+func (vcm *VCManager) RemoveVC(vc *model.VirtualCluster) (bool, error) {
+	if _, ok := vcm.vcs.Load(vc.ClusterID); !ok {
+		return false, fmt.Errorf("VC %d doesn't exist", vc.ClusterID)
+	}
+
+	logrus.Debugf("[VC Mgr] Removing VC: %d", vc.ClusterID)
 	// ClusterID -> *VirtualCluster
 	vcm.vcs.Delete(vc.ClusterID)
 
@@ -167,6 +184,8 @@ func (vcm *VCManager) RemoveVC(vc *model.VirtualCluster) {
 	for _, l := range vc.Leaves.Internal() {
 		vcm.leafVCs.RemoveFromVCList(l.ID, vc)
 	}
+
+	return true, nil
 }
 
 // Usage: get which VCs are impacted by a server failure
@@ -235,7 +254,7 @@ func (vcm *VCManager) Debug() {
 		vc.Debug()
 	}
 	logrus.Debug()
-	for sID, vcs := range vcm.serverVCs.internal {
+	for sID, vcs := range vcm.serverVCs.Internal() {
 		if len(vcs) > 0 {
 			logrus.Debug("-- Server ID: ", sID)
 			var line []string
@@ -247,7 +266,7 @@ func (vcm *VCManager) Debug() {
 		}
 
 	}
-
+	vcm.leafVCs.RLock()
 	for lID, vcs := range vcm.leafVCs.internal {
 		if len(vcs) > 0 {
 			logrus.Debug("-- Leaf ID: ", lID)
@@ -259,6 +278,7 @@ func (vcm *VCManager) Debug() {
 			logrus.Debug()
 		}
 	}
+	vcm.leafVCs.RUnlock()
 }
 
 /*

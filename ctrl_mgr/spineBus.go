@@ -118,7 +118,11 @@ func (bus *SpineBus) processIngress() {
 		case message := <-bus.newVCs:
 			// TODO: receives a msg that a VC was added
 			go func() {
-				logrus.Debugf("[SpineBus-%d] Using BfRt Client to add VC-related DP info tp spine; VC ID = %d", bus.ctrlID, message.VCInfo.Id)
+				if message.Type == horus_net.VCUpdateAdd {
+					logrus.Debugf("[SpineBus-%d] Using BfRt Client to add VC-related DP info tp spine; VC ID = %d", bus.ctrlID, message.VCInfo.Id)
+				} else if message.Type == horus_net.VCUpdateRem {
+					logrus.Debugf("[SpineBus-%d] Using BfRt Client to remove VC-related DP info tp spine; VC ID = %d", bus.ctrlID, message.VCInfo.Id)
+				}
 				if bus.vcm != nil {
 					bus.vcm.Debug()
 				}

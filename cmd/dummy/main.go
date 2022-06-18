@@ -219,6 +219,7 @@ func main() {
 	// test_add_leaf_with_servers_then_fail(pool)
 
 	addVC(pool, 2, []uint32{0}, []uint32{2, 3, 4})
+	time.Sleep(2 * time.Second)
 	removeVC(pool, 2)
 	// getVCs(vcPool)
 }

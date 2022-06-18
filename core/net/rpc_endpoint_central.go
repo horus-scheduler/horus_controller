@@ -161,7 +161,10 @@ func (s *CentralRpcEndpoint) sendAddServerEvent(msg *ServerAddedMessage) error {
 	return err
 }
 
-func (s *CentralRpcEndpoint) sendAddVCToSpine(vcInfo *horus_pb.VCInfo, spine *model.Node) error {
+func (s *CentralRpcEndpoint) sendAddVCToSpine(vcInfo *horus_pb.VCInfo,
+	vcType VCUpdateType,
+	spine *model.Node,
+) error {
 	if spine == nil {
 		return errors.New("spine doesn't exist")
 	}
@@ -177,10 +180,15 @@ func (s *CentralRpcEndpoint) sendAddVCToSpine(vcInfo *horus_pb.VCInfo, spine *mo
 		return err
 	}
 	defer conn.Close()
-
-	logrus.Debugf("[CentralRPC] Sending AddVC to Spine %d", spine.ID)
 	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
-	_, err = client.AddVC(context.Background(), vcInfo)
+
+	if vcType == VCUpdateAdd {
+		logrus.Debugf("[CentralRPC] Sending AddVC to Spine %d", spine.ID)
+		_, err = client.AddVC(context.Background(), vcInfo)
+	} else if vcType == VCUpdateRem {
+		logrus.Debugf("[CentralRPC] Sending RemoveVC to Spine %d", spine.ID)
+		_, err = client.RemoveVC(context.Background(), vcInfo)
+	}
 	return err
 }
 
@@ -190,7 +198,7 @@ func (s *CentralRpcEndpoint) broadcastAddVCToSpines(msg *VCUpdatedMessage) error
 		return errors.New("spines don't exist")
 	}
 	for _, spine := range spines {
-		err := s.sendAddVCToSpine(msg.VCInfo, spine)
+		err := s.sendAddVCToSpine(msg.VCInfo, msg.Type, spine)
 		if err != nil {
 			return err
 		}

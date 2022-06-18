@@ -104,7 +104,11 @@ func (e *LeafBus) processIngress() {
 		// Message about a new added VC from the RPC
 		case message := <-e.newVCsRPC:
 			go func() {
-				logrus.Debugf("[LeafBus-%d] VC %d was added", e.ctrlID, message.VCInfo.Id)
+				if message.Type == horus_net.VCUpdateAdd {
+					logrus.Debugf("[LeafBus-%d] VC %d was added", e.ctrlID, message.VCInfo.Id)
+				} else if message.Type == horus_net.VCUpdateRem {
+					logrus.Debugf("[LeafBus-%d] VC %d was removed", e.ctrlID, message.VCInfo.Id)
+				}
 				e.vcm.Debug()
 			}()
 
