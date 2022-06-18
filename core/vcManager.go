@@ -1,7 +1,6 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -144,7 +143,7 @@ func (vcm *VCManager) GetVC(clusterID uint16) *model.VirtualCluster {
 func (vcm *VCManager) AddVC(vc *model.VirtualCluster) (bool, error) {
 	// If the `vc` was created using NewVC(), then it's guaranteed that spines, leaves, and servers exist.
 	if _, ok := vcm.vcs.Load(vc.ClusterID); ok {
-		return false, errors.New(fmt.Sprintf("VC %d already exists", vc.ClusterID))
+		return false, fmt.Errorf("VC %d already exists", vc.ClusterID)
 	}
 
 	// ClusterID -> *VirtualCluster
