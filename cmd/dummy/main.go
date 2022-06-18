@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
@@ -12,10 +11,12 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Topology-related APIs
+
 func failLeaf(pool *grpcpool.Pool, leafID uint32) {
 	conn, err := pool.Get(context.Background())
 	if err != nil {
-		log.Println(err)
+		logrus.Error(err)
 	}
 	defer conn.Close()
 
@@ -23,13 +24,13 @@ func failLeaf(pool *grpcpool.Pool, leafID uint32) {
 	leafInfo := &horus_pb.LeafInfo{Id: leafID, SpineID: 0}
 
 	resp, _ := client.FailLeaf(context.Background(), leafInfo)
-	log.Println(resp.Status)
+	logrus.Info(resp.Status)
 }
 
 func failServer(pool *grpcpool.Pool, serverID uint32) {
 	conn, err := pool.Get(context.Background())
 	if err != nil {
-		log.Println(err)
+		logrus.Error(err)
 	}
 	defer conn.Close()
 
@@ -37,7 +38,7 @@ func failServer(pool *grpcpool.Pool, serverID uint32) {
 	serverInfo := &horus_pb.ServerInfo{Id: serverID}
 
 	resp, _ := client.FailServer(context.Background(), serverInfo)
-	log.Println(resp.Status)
+	logrus.Info(resp.Status)
 }
 
 func addLeaf(pool *grpcpool.Pool,
@@ -46,7 +47,7 @@ func addLeaf(pool *grpcpool.Pool,
 ) {
 	conn, err := pool.Get(context.Background())
 	if err != nil {
-		log.Println(err)
+		logrus.Error(err)
 	}
 	defer conn.Close()
 
@@ -59,7 +60,7 @@ func addLeaf(pool *grpcpool.Pool,
 	}
 
 	resp, _ := client.AddLeaf(context.Background(), leafInfo)
-	log.Println(resp.Status)
+	logrus.Info(resp.Status)
 }
 
 func addServer(pool *grpcpool.Pool,
@@ -69,7 +70,7 @@ func addServer(pool *grpcpool.Pool,
 ) {
 	conn, err := pool.Get(context.Background())
 	if err != nil {
-		log.Println(err)
+		logrus.Error(err)
 	}
 	defer conn.Close()
 
@@ -83,13 +84,14 @@ func addServer(pool *grpcpool.Pool,
 	}
 
 	resp, _ := client.AddServer(context.Background(), serverInfo)
-	log.Println(resp.Status)
+	logrus.Info(resp.Status)
 }
 
+// VC-related APIs
 func getVCs(pool *grpcpool.Pool) {
 	conn, err := pool.Get(context.Background())
 	if err != nil {
-		log.Println(err)
+		logrus.Error(err)
 	}
 	defer conn.Close()
 
@@ -105,51 +107,118 @@ func getVCs(pool *grpcpool.Pool) {
 	}
 }
 
+func addVC(pool *grpcpool.Pool,
+	vcID uint32,
+	spines []uint32,
+	servers []uint32,
+) {
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
+	}
+	defer conn.Close()
+
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
+	vcInfo := &horus_pb.VCInfo{
+		Id:     vcID,
+		Spines: spines,
+	}
+	for _, sID := range servers {
+		vcInfo.Servers = append(vcInfo.Servers, &horus_pb.VCServerInfo{
+			Id: sID,
+		})
+	}
+
+	resp, err := client.AddVC(context.Background(), vcInfo)
+	if resp != nil {
+		logrus.Info(resp.Status)
+	}
+	if err != nil {
+		logrus.Error(err)
+	}
+}
+
+func removeVC(pool *grpcpool.Pool,
+	vcID uint32,
+) {
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
+	}
+	defer conn.Close()
+
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
+	vcInfo := &horus_pb.VCInfo{
+		Id: vcID,
+	}
+
+	resp, err := client.RemoveVC(context.Background(), vcInfo)
+	if resp != nil {
+		logrus.Info(resp.Status)
+	}
+	if err != nil {
+		logrus.Error(err)
+	}
+}
+
 func createPool() *grpcpool.Pool {
 	factory := func() (*grpc.ClientConn, error) {
 		conn, err := grpc.Dial("0.0.0.0:4001", grpc.WithInsecure())
 		if err != nil {
-			log.Println(err)
+			logrus.Error(err)
 		}
 		return conn, err
 	}
 	var err error
 	pool, err := grpcpool.New(factory, 2, 6, 5*time.Second)
 	if err != nil {
-		log.Println(err)
+		logrus.Error(err)
 	}
 
 	return pool
 }
 
-func main() {
+func test_fail_three_servers_then_leaf(pool *grpcpool.Pool) {
+	logrus.Info("Failing server 0")
+	failServer(pool, 0)
+	time.Sleep(time.Second)
 
-	topoPool := createPool()
-	// logrus.Info("Failing server 0")
-	// failServer(topoPool, 0)
-	// time.Sleep(time.Second)
-	// logrus.Info("Failing server 1")
-	// failServer(topoPool, 1)
-	// time.Sleep(time.Second)
-	// logrus.Info("Failing server 2")
-	// failServer(topoPool, 2)
-	// time.Sleep(time.Second)
-	// logrus.Info("Failing leaf 0")
-	// failLeaf(topoPool, 0)
+	logrus.Info("Failing server 1")
+	failServer(pool, 1)
+	time.Sleep(time.Second)
 
-	// // This one should succeed
-	// addServer(topoPool, 9, 1, 8, "", 0)
-	// // This one should fail
-	// addServer(topoPool, 10, 1, 8, "", 5)
+	logrus.Info("Failing server 2")
+	failServer(pool, 2)
+	time.Sleep(time.Second)
 
-	addLeaf(topoPool, 3, 0, "0.0.0.0:6004", "0.0.0.0:7001")
+	logrus.Info("Failing leaf 0")
+	failLeaf(pool, 0)
+}
+
+func test_add_two_servers(pool *grpcpool.Pool) {
+	// This one should succeed
+	addServer(pool, 9, 1, 8, "", 0)
+	// This one should fail
+	addServer(pool, 10, 1, 8, "", 5)
+}
+
+func test_add_leaf_with_servers_then_fail(pool *grpcpool.Pool) {
+	addLeaf(pool, 3, 0, "0.0.0.0:6004", "0.0.0.0:7001")
 	time.Sleep(5 * time.Second)
-	addServer(topoPool, 9, 1, 8, "", 3)
+	addServer(pool, 9, 1, 8, "", 3)
 	time.Sleep(time.Second)
-	addServer(topoPool, 10, 1, 8, "", 3)
+	addServer(pool, 10, 1, 8, "", 3)
 	time.Sleep(time.Second)
-	failLeaf(topoPool, 3)
+	failLeaf(pool, 3)
+}
 
-	// vcPool := createVCPool()
+func main() {
+	pool := createPool()
+	// test_fail_three_servers_then_leaf(pool)
+	// test_add_two_servers(pool)
+	// test_add_leaf_with_servers_then_fail(pool)
+
+	addVC(pool, 2, []uint32{0}, []uint32{2, 3, 4})
+	removeVC(pool, 2)
 	// getVCs(vcPool)
 }

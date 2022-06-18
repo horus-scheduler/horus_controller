@@ -14,6 +14,7 @@ type leafSrvServer struct {
 
 	updatedServers chan *core.LeafHealthMsg
 	newServers     chan *ServerAddedMessage
+	newVCs         chan *VCUpdatedMessage
 	topology       *model.Topology
 	vcm            *core.VCManager
 }
@@ -22,12 +23,14 @@ func NewLeafSrvServer(topology *model.Topology,
 	vcm *core.VCManager,
 	updatedServers chan *core.LeafHealthMsg,
 	newServers chan *ServerAddedMessage,
+	newVCs chan *VCUpdatedMessage,
 ) *leafSrvServer {
 	return &leafSrvServer{
 		topology:       topology,
 		vcm:            vcm,
 		updatedServers: updatedServers,
 		newServers:     newServers,
+		newVCs:         newVCs,
 	}
 }
 func (s *leafSrvServer) AddLeaf(ctx context.Context, leaf *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
@@ -83,14 +86,25 @@ func (s *leafSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.Ser
 	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }
 
-func (v *leafSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
+func (s *leafSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
 	return &horus_pb.VCsResponse{}, nil
 }
 
-func (v *leafSrvServer) AddVC(context.Context, *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+func (s *leafSrvServer) AddVC(ctx context.Context, vcInfo *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+	logrus.Debugf("[LeafServer] Adding VC: %d", vcInfo.Id)
+	vc, err := model.NewVC(vcInfo, s.topology)
+	if err != nil {
+		logrus.Warnf("[LeafServer] Adding VC: %d failed: %s", vcInfo.Id, err.Error())
+		return nil, err
+	}
+	if ok, err := s.vcm.AddVC(vc); !ok {
+		return nil, err
+	}
+
+	s.newVCs <- NewVCUpdatedMessage(vcInfo, VCUpdateAdd, nil)
 	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }
 
-func (v *leafSrvServer) RemoveVC(context.Context, *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+func (s *leafSrvServer) RemoveVC(context.Context, *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
 	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }

@@ -19,6 +19,7 @@ type SpineBusChan struct {
 	rpcFailedServers chan *horus_net.ServerFailedMessage // recv-from gRPC
 	newLeaves        chan *horus_net.LeafAddedMessage
 	newServers       chan *horus_net.ServerAddedMessage
+	newVCs           chan *horus_net.VCUpdatedMessage
 
 	// ASIC channels
 	asicIngress chan []byte // recv-from the ASIC
@@ -31,6 +32,7 @@ func NewSpineBusChan(hmIngressActiveNode chan *core.LeafHealthMsg,
 	rpcFailedServers chan *horus_net.ServerFailedMessage,
 	newLeaves chan *horus_net.LeafAddedMessage,
 	newServers chan *horus_net.ServerAddedMessage,
+	newVCs chan *horus_net.VCUpdatedMessage,
 	asicIngress chan []byte,
 	asicEgress chan []byte) *SpineBusChan {
 	return &SpineBusChan{
@@ -39,6 +41,7 @@ func NewSpineBusChan(hmIngressActiveNode chan *core.LeafHealthMsg,
 		rpcFailedServers:    rpcFailedServers,
 		newLeaves:           newLeaves,
 		newServers:          newServers,
+		newVCs:              newVCs,
 		asicIngress:         asicIngress,
 		asicEgress:          asicEgress,
 	}
@@ -49,6 +52,7 @@ type SpineBus struct {
 	*SpineBusChan
 	ctrlID    uint16
 	topology  *model.Topology
+	vcm       *core.VCManager
 	healthMgr *core.LeafHealthManager
 	bfrt      *bfrtC.Client // BfRt client
 	doneChan  chan bool
@@ -58,12 +62,14 @@ type SpineBus struct {
 func NewSpineBus(ctrlID uint16,
 	busChan *SpineBusChan,
 	topology *model.Topology,
+	vcm *core.VCManager,
 	healthMgr *core.LeafHealthManager,
 	bfrt *bfrtC.Client) *SpineBus {
 	return &SpineBus{
 		SpineBusChan: busChan,
 		ctrlID:       ctrlID,
 		topology:     topology,
+		vcm:          vcm,
 		healthMgr:    healthMgr,
 		bfrt:         bfrt,
 		doneChan:     make(chan bool, 1),
@@ -107,6 +113,14 @@ func (bus *SpineBus) processIngress() {
 				logrus.Debugf("[SpineBus-%d] Using BfRt Client to add server-related DP info at spine; serverID = %d", bus.ctrlID, message.Server.Id)
 				if bus.topology != nil {
 					bus.topology.Debug()
+				}
+			}()
+		case message := <-bus.newVCs:
+			// TODO: receives a msg that a VC was added
+			go func() {
+				logrus.Debugf("[SpineBus-%d] Using BfRt Client to add VC-related DP info tp spine; VC ID = %d", bus.ctrlID, message.VCInfo.Id)
+				if bus.vcm != nil {
+					bus.vcm.Debug()
 				}
 			}()
 

@@ -72,6 +72,7 @@ func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig, opts ...To
 	hmEgress := make(chan *core.LeafHealthMsg, horus_net.DefaultUnixSockRecvSize)
 	updatedServersRPC := make(chan *core.LeafHealthMsg, horus_net.DefaultUnixSockRecvSize)
 	newServersRPC := make(chan *horus_net.ServerAddedMessage, horus_net.DefaultUnixSockRecvSize)
+	newVCsRPC := make(chan *horus_net.VCUpdatedMessage, horus_net.DefaultUnixSockRecvSize)
 
 	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(ctrlID), target)
@@ -91,10 +92,11 @@ func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig, opts ...To
 		topology,
 		vcm,
 		updatedServersRPC,
-		newServersRPC)
+		newServersRPC,
+		newVCsRPC)
 
-	ch := NewLeafBusChan(hmEgress, updatedServersRPC, newServersRPC, asicIngress, asicEgress)
-	bus := NewLeafBus(ctrlID, ch, healthMgr, topology, bfrt)
+	ch := NewLeafBusChan(hmEgress, updatedServersRPC, newServersRPC, newVCsRPC, asicIngress, asicEgress)
+	bus := NewLeafBus(ctrlID, ch, healthMgr, topology, vcm, bfrt)
 	return &leafController{
 		rpcEndPoint: rpcEndPoint,
 		healthMgr:   healthMgr,
@@ -123,15 +125,17 @@ func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineCon
 	failedServers := make(chan *horus_net.ServerFailedMessage, horus_net.DefaultRpcRecvSize)
 	newLeaves := make(chan *horus_net.LeafAddedMessage, horus_net.DefaultRpcRecvSize)
 	newServers := make(chan *horus_net.ServerAddedMessage, horus_net.DefaultRpcRecvSize)
+	newVCs := make(chan *horus_net.VCUpdatedMessage, horus_net.DefaultRpcRecvSize)
 
 	spine := topology.GetNode(ctrlID, model.NodeType_Spine)
 	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(spine.ID), target)
 
 	rpcEndPoint := horus_net.NewSpineRpcEndpoint(spine.Address, cfg.RemoteSrvServer,
-		topology, vcm, failedLeaves, failedServers, newLeaves, newServers)
-	ch := NewSpineBusChan(activeNode, failedLeaves, failedServers, newLeaves, newServers, asicIngress, asicEgress)
-	bus := NewSpineBus(ctrlID, ch, topology, nil, bfrt)
+		topology, vcm, failedLeaves, failedServers, newLeaves, newServers, newVCs)
+	ch := NewSpineBusChan(activeNode, failedLeaves, failedServers, newLeaves, newServers, newVCs,
+		asicIngress, asicEgress)
+	bus := NewSpineBus(ctrlID, ch, topology, vcm, nil, bfrt)
 	return &spineController{
 		rpcEndPoint: rpcEndPoint,
 		healthMgr:   nil,
@@ -171,8 +175,12 @@ func (c *leafController) Start() {
 		logrus.Error(err)
 	} else {
 		for _, vcConf := range vcs {
-			vc := model.NewVC(vcConf, c.topology)
-			c.vcm.AddVC(vc)
+			vc, err := model.NewVC(vcConf, c.topology)
+			if err != nil {
+				logrus.Error(err)
+			} else {
+				c.vcm.AddVC(vc)
+			}
 		}
 	}
 
@@ -209,8 +217,12 @@ func (c *spineController) Start() {
 		logrus.Error(err)
 	} else {
 		for _, vcConf := range vcs {
-			vc := model.NewVC(vcConf, c.topology)
-			c.vcm.AddVC(vc)
+			vc, err := model.NewVC(vcConf, c.topology)
+			if err != nil {
+				logrus.Error(err)
+			} else {
+				c.vcm.AddVC(vc)
+			}
 		}
 	}
 

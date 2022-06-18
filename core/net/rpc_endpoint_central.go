@@ -24,6 +24,7 @@ type CentralRpcEndpoint struct {
 	failedServers chan *ServerFailedMessage
 	newLeaves     chan *LeafAddedMessage
 	newServers    chan *ServerAddedMessage
+	newVCs        chan *VCUpdatedMessage
 
 	topology      *model.Topology
 	vcm           *core.VCManager
@@ -46,6 +47,7 @@ func NewCentralRpcEndpoint(srvLAddr string,
 		failedServers: make(chan *ServerFailedMessage, DefaultRpcRecvSize),
 		newLeaves:     make(chan *LeafAddedMessage, DefaultRpcRecvSize),
 		newServers:    make(chan *ServerAddedMessage, DefaultRpcRecvSize),
+		newVCs:        make(chan *VCUpdatedMessage, DefaultRpcRecvSize),
 		doneChan:      make(chan bool, 1),
 	}
 }
@@ -57,7 +59,10 @@ func (s *CentralRpcEndpoint) createServiceListener() error {
 		return err
 	}
 	rpcServer := grpc.NewServer()
-	topoServer := NewCentralSrvServer(s.topology, s.vcm, s.failedLeaves, s.failedServers, s.newLeaves, s.newServers)
+	topoServer := NewCentralSrvServer(s.topology, s.vcm,
+		s.failedLeaves, s.failedServers,
+		s.newLeaves, s.newServers,
+		s.newVCs)
 	horus_pb.RegisterHorusServiceServer(rpcServer, topoServer)
 	return rpcServer.Serve(lis)
 }
@@ -156,6 +161,43 @@ func (s *CentralRpcEndpoint) sendAddServerEvent(msg *ServerAddedMessage) error {
 	return err
 }
 
+func (s *CentralRpcEndpoint) sendAddVCToSpine(vcInfo *horus_pb.VCInfo, spine *model.Node) error {
+	if spine == nil {
+		return errors.New("spine doesn't exist")
+	}
+
+	pool, ok := s.spineConnPool[spine.ID]
+	if !ok {
+		return errors.New("the pool for spine " + strconv.Itoa(int(spine.ID)) + " doesn't exist")
+	}
+
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
+		return err
+	}
+	defer conn.Close()
+
+	logrus.Debugf("[CentralRPC] Sending AddVC to Spine %d", spine.ID)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
+	_, err = client.AddVC(context.Background(), vcInfo)
+	return err
+}
+
+func (s *CentralRpcEndpoint) broadcastAddVCToSpines(msg *VCUpdatedMessage) error {
+	spines := msg.Dsts
+	if len(spines) == 0 {
+		return errors.New("spines don't exist")
+	}
+	for _, spine := range spines {
+		err := s.sendAddVCToSpine(msg.VCInfo, spine)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *CentralRpcEndpoint) processEvents() {
 	for {
 		select {
@@ -180,6 +222,11 @@ func (s *CentralRpcEndpoint) processEvents() {
 			}
 		case newServerMsg := <-s.newServers:
 			err := s.sendAddServerEvent(newServerMsg)
+			if err != nil {
+				logrus.Error(err)
+			}
+		case newVC := <-s.newVCs:
+			err := s.broadcastAddVCToSpines(newVC)
 			if err != nil {
 				logrus.Error(err)
 			}

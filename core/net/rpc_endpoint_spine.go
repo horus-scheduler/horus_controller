@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -37,6 +38,9 @@ type SpineRpcEndpoint struct {
 	newServersEgExt chan *ServerAddedMessage
 	newServersEgInt chan *ServerAddedMessage
 
+	newVCsEgExt chan *VCUpdatedMessage
+	newVCsEgInt chan *VCUpdatedMessage
+
 	centralConnPool *grpcpool.Pool
 	mgConnPool      map[string]*grpcpool.Pool
 	leafConnPool    map[string]*grpcpool.Pool
@@ -50,6 +54,7 @@ func NewSpineRpcEndpoint(srvLAddr, srvCentralAddr string,
 	failedServers chan *ServerFailedMessage,
 	newLeaves chan *LeafAddedMessage,
 	newServers chan *ServerAddedMessage,
+	newVCs chan *VCUpdatedMessage,
 ) *SpineRpcEndpoint {
 	return &SpineRpcEndpoint{
 		SrvLAddr:           srvLAddr,
@@ -64,6 +69,8 @@ func NewSpineRpcEndpoint(srvLAddr, srvCentralAddr string,
 		newLeavesEgInt:     make(chan *LeafAddedMessage, DefaultRpcRecvSize),
 		newServersEgExt:    newServers,
 		newServersEgInt:    make(chan *ServerAddedMessage, DefaultRpcRecvSize),
+		newVCsEgExt:        newVCs,
+		newVCsEgInt:        make(chan *VCUpdatedMessage, DefaultRpcRecvSize),
 		mgConnPool:         make(map[string]*grpcpool.Pool),
 		leafConnPool:       make(map[string]*grpcpool.Pool),
 		doneChan:           make(chan bool, 1),
@@ -81,7 +88,8 @@ func (s *SpineRpcEndpoint) createServiceListener() error {
 		s.failedLeavesEgInt,
 		s.failedServersEgInt,
 		s.newLeavesEgInt,
-		s.newServersEgInt)
+		s.newServersEgInt,
+		s.newVCsEgInt)
 	horus_pb.RegisterHorusServiceServer(rpcServer, topoServer)
 	return rpcServer.Serve(lis)
 }
@@ -258,6 +266,43 @@ func (s *SpineRpcEndpoint) sendServerAdded(newServer *ServerAddedMessage) error 
 	return errors.New("added server doesn't exist")
 }
 
+func (s *SpineRpcEndpoint) sendAddVCToLeaf(vcInfo *horus_pb.VCInfo, leaf *model.Node) error {
+	if leaf == nil {
+		return errors.New("leaf doesn't exist")
+	}
+
+	pool, ok := s.leafConnPool[leaf.Address]
+	if !ok {
+		return errors.New("the pool for leaf " + strconv.Itoa(int(leaf.ID)) + " doesn't exist")
+	}
+
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
+		return err
+	}
+	defer conn.Close()
+
+	logrus.Debugf("[SpineRPC] Sending AddVC to Leaf %d", leaf.ID)
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
+	_, err = client.AddVC(context.Background(), vcInfo)
+	return err
+}
+
+func (s *SpineRpcEndpoint) broadcastAddVCToLeaves(msg *VCUpdatedMessage) error {
+	leaves := msg.Dsts
+	if len(leaves) == 0 {
+		return errors.New("leaves don't exist")
+	}
+	for _, spine := range leaves {
+		err := s.sendAddVCToLeaf(msg.VCInfo, spine)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *SpineRpcEndpoint) processEvents() {
 	for {
 		select {
@@ -298,6 +343,13 @@ func (s *SpineRpcEndpoint) processEvents() {
 			}
 			logrus.Debugf("[SpineRPC] Send added server %d to newServersEgExt", newServer.Server.Id)
 			s.newServersEgExt <- NewServerAddedMessage(newServer.Server, newServer.Dst)
+		case newVC := <-s.newVCsEgInt:
+			err := s.broadcastAddVCToLeaves(newVC)
+			if err != nil {
+				logrus.Error(err)
+			}
+			logrus.Debugf("[SpineRPC] Send added VC %d to newVCsEgExt", newVC.VCInfo.Id)
+			s.newVCsEgExt <- NewVCUpdatedMessage(newVC.VCInfo, newVC.Type, newVC.Dsts)
 		default:
 			continue
 		}

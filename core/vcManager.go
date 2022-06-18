@@ -1,6 +1,8 @@
 package core
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -126,7 +128,12 @@ func (vcm *VCManager) GetVCs() []*model.VirtualCluster {
 }
 
 // Does not (and shouldn't) modify the topology
-func (vcm *VCManager) AddVC(vc *model.VirtualCluster) {
+func (vcm *VCManager) AddVC(vc *model.VirtualCluster) (bool, error) {
+	// If the `vc` was created using NewVC(), then it's guaranteed that spines, leaves, and servers exist.
+	if _, ok := vcm.vcs.Load(vc.ClusterID); ok {
+		return false, errors.New(fmt.Sprintf("VC %d already exists", vc.ClusterID))
+	}
+
 	// ClusterID -> *VirtualCluster
 	vcm.vcs.Store(vc.ClusterID, vc)
 
@@ -141,6 +148,8 @@ func (vcm *VCManager) AddVC(vc *model.VirtualCluster) {
 	for _, l := range vc.Leaves.Internal() {
 		vcm.leafVCs.AppendToVCList(l.ID, vc)
 	}
+
+	return true, nil
 }
 
 // Does not (and shouldn't) modify the topology

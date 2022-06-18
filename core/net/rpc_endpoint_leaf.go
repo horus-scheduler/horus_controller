@@ -25,6 +25,7 @@ type LeafRpcEndpoint struct {
 
 	updatedServersEgExt chan *core.LeafHealthMsg
 	newServersEgExt     chan *ServerAddedMessage
+	newVCsEgExt         chan *VCUpdatedMessage
 
 	centralConnPool *grpcpool.Pool
 	doneChan        chan bool
@@ -35,6 +36,7 @@ func NewLeafRpcEndpoint(srvLAddr, srvCentralAddr string,
 	vcm *core.VCManager,
 	updatedServers chan *core.LeafHealthMsg,
 	newServers chan *ServerAddedMessage,
+	newVCs chan *VCUpdatedMessage,
 ) *LeafRpcEndpoint {
 	return &LeafRpcEndpoint{
 		SrvLAddr:            srvLAddr,
@@ -43,6 +45,7 @@ func NewLeafRpcEndpoint(srvLAddr, srvCentralAddr string,
 		vcm:                 vcm,
 		updatedServersEgExt: updatedServers,
 		newServersEgExt:     newServers,
+		newVCsEgExt:         newVCs,
 		doneChan:            make(chan bool, 1),
 	}
 }
@@ -55,7 +58,9 @@ func (s *LeafRpcEndpoint) createServiceListener() error {
 	}
 	logrus.Infof("[LeafRPC] Creating topologyServer at %s", s.SrvLAddr)
 	rpcServer := grpc.NewServer()
-	topoServer := NewLeafSrvServer(s.topology, s.vcm, s.updatedServersEgExt, s.newServersEgExt)
+	topoServer := NewLeafSrvServer(s.topology, s.vcm,
+		s.updatedServersEgExt,
+		s.newServersEgExt, s.newVCsEgExt)
 	horus_pb.RegisterHorusServiceServer(rpcServer, topoServer)
 	return rpcServer.Serve(lis)
 }
@@ -93,12 +98,6 @@ func (s *LeafRpcEndpoint) GetVCs() ([]*horus_pb.VCInfo, error) {
 }
 
 func (s *LeafRpcEndpoint) processEvents() {
-	// for {
-	// 	select {
-	// 	default:
-	// 		continue
-	// 	}
-	// }
 }
 
 func (s *LeafRpcEndpoint) Start() {

@@ -40,15 +40,19 @@ func NewCentralController(opts ...CentralControllerOption) *centralController {
 
 	initLogger(binCfg)
 
-	logrus.Debug("[Central] Initializing Topology and VC Manager...")
+	logrus.Info("[Central] Initializing Topology and VC Manager...")
 	topology := model.NewDCNTopology(topoCfg)
 	vcm := core.NewVCManager(topology)
 	for _, vcConf := range vcsConf.VCs {
-		vc := model.NewVC(vcConf, topology)
-		vcm.AddVC(vc)
+		vc, err := model.NewVC(vcConf, topology)
+		if err != nil {
+			logrus.Error(err)
+		} else {
+			vcm.AddVC(vc)
+		}
 	}
 
-	logrus.Debug("[Central] Topology and VC Manager are initialized")
+	logrus.Info("[Central] Topology and VC Manager are initialized")
 
 	rpcEndPoint := net.NewCentralRpcEndpoint(binCfg.SrvServer, topology, vcm)
 	bus := NewCentralBus(topology, vcm, NewCentralBusChan())

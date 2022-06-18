@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"strconv"
 	"sync"
 
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
@@ -17,28 +19,37 @@ type VirtualCluster struct {
 	Servers *NodeMap
 }
 
-func NewVC(vcConfig *horus_pb.VCInfo, topology *Topology) *VirtualCluster {
-	s := &VirtualCluster{ClusterID: uint16(vcConfig.Id)}
-	s.Servers = NewNodeMap()
-	s.Leaves = NewNodeMap()
-	s.Spines = NewNodeMap()
+func NewVC(vcConfig *horus_pb.VCInfo, topology *Topology) (*VirtualCluster, error) {
+	vc := &VirtualCluster{ClusterID: uint16(vcConfig.Id)}
+	vc.Servers = NewNodeMap()
+	vc.Leaves = NewNodeMap()
+	vc.Spines = NewNodeMap()
 
 	for _, spineID := range vcConfig.Spines {
-		node := topology.GetNode(uint16(spineID), NodeType_Spine)
-		if node != nil {
-			s.Spines.Store(node.ID, node)
+		spine := topology.GetNode(uint16(spineID), NodeType_Spine)
+		if spine != nil {
+			vc.Spines.Store(spine.ID, spine)
+		} else {
+			return nil, errors.New("spine " + strconv.Itoa(int(spineID)) + " doesn't exist")
 		}
 	}
 
 	for _, serverConfig := range vcConfig.Servers {
-		node := topology.GetNode(uint16(serverConfig.Id), NodeType_Server)
-		if node != nil {
-			s.Servers.Store(node.ID, node)
-			s.Leaves.Store(node.Parent.ID, node.Parent)
+		server := topology.GetNode(uint16(serverConfig.Id), NodeType_Server)
+		if server != nil {
+			leaf := server.Parent
+			if leaf != nil {
+				vc.Servers.Store(server.ID, server)
+				vc.Leaves.Store(server.Parent.ID, server.Parent)
+			} else {
+				return nil, errors.New("leaf doesn't exist")
+			}
+		} else {
+			return nil, errors.New("server " + strconv.Itoa(int(serverConfig.Id)) + " doesn't exist")
 		}
 	}
 
-	return s
+	return vc, nil
 }
 
 // Maybe?

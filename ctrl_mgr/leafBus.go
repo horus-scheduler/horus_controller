@@ -17,6 +17,7 @@ type LeafBusChan struct {
 	hmMsg             chan *core.LeafHealthMsg           // recv-from healthManager
 	updatedServersRPC chan *core.LeafHealthMsg           // recv-from RPC endpoint
 	newServersRPC     chan *horus_net.ServerAddedMessage // recv-from RPC endpoint
+	newVCsRPC         chan *horus_net.VCUpdatedMessage   // recv-from RPC endpoint
 
 	// ASIC channels
 	asicIngress chan []byte // recv-from the ASIC
@@ -27,12 +28,14 @@ type LeafBusChan struct {
 func NewLeafBusChan(hmIngressActiveNode chan *core.LeafHealthMsg,
 	updatedServersRPC chan *core.LeafHealthMsg,
 	newServersRPC chan *horus_net.ServerAddedMessage,
+	newVCsRPC chan *horus_net.VCUpdatedMessage,
 	asicIngress chan []byte,
 	asicEgress chan []byte) *LeafBusChan {
 	return &LeafBusChan{
 		hmMsg:             hmIngressActiveNode,
 		updatedServersRPC: updatedServersRPC,
 		newServersRPC:     newServersRPC,
+		newVCsRPC:         newVCsRPC,
 		asicIngress:       asicIngress,
 		asicEgress:        asicEgress,
 	}
@@ -44,6 +47,7 @@ type LeafBus struct {
 	ctrlID    uint16
 	healthMgr *core.LeafHealthManager
 	topology  *model.Topology
+	vcm       *core.VCManager
 	bfrt      *bfrtC.Client // BfRt client
 	DoneChan  chan bool
 }
@@ -52,12 +56,14 @@ type LeafBus struct {
 func NewLeafBus(ctrlID uint16, busChan *LeafBusChan,
 	healthMgr *core.LeafHealthManager,
 	topology *model.Topology,
+	vcm *core.VCManager,
 	bfrt *bfrtC.Client) *LeafBus {
 	return &LeafBus{
 		LeafBusChan: busChan,
 		ctrlID:      ctrlID,
 		healthMgr:   healthMgr,
 		topology:    topology,
+		vcm:         vcm,
 		bfrt:        bfrt,
 		DoneChan:    make(chan bool, 1),
 	}
@@ -93,6 +99,13 @@ func (e *LeafBus) processIngress() {
 			go func() {
 				logrus.Debugf("[LeafBus-%d] Sending update pkt to server %d", e.ctrlID, message.Server.Id)
 				e.topology.Debug()
+			}()
+
+		// Message about a new added VC from the RPC
+		case message := <-e.newVCsRPC:
+			go func() {
+				logrus.Debugf("[LeafBus-%d] VC %d was added", e.ctrlID, message.VCInfo.Id)
+				e.vcm.Debug()
 			}()
 
 		// Message about servers to be updated from either the health manager or the RPC

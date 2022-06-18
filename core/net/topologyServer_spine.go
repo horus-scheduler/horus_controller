@@ -16,6 +16,7 @@ type spineSrvServer struct {
 	failedServersToRPC chan *ServerFailedMessage
 	newLeavesToRPC     chan *LeafAddedMessage
 	newServers         chan *ServerAddedMessage
+	newVCs             chan *VCUpdatedMessage
 	topology           *model.Topology
 	vcm                *core.VCManager
 }
@@ -26,6 +27,7 @@ func NewSpineSrvServer(topology *model.Topology,
 	failedServersToRPC chan *ServerFailedMessage,
 	newLeavesToRPC chan *LeafAddedMessage,
 	newServers chan *ServerAddedMessage,
+	newVCs chan *VCUpdatedMessage,
 ) *spineSrvServer {
 	return &spineSrvServer{
 		topology:           topology,
@@ -34,6 +36,7 @@ func NewSpineSrvServer(topology *model.Topology,
 		failedServersToRPC: failedServersToRPC,
 		newLeavesToRPC:     newLeavesToRPC,
 		newServers:         newServers,
+		newVCs:             newVCs,
 	}
 }
 func (s *spineSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
@@ -113,11 +116,27 @@ func (s *spineSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.Se
 	return &horus_pb.HorusResponse{Status: "FAILD"}, nil
 }
 
-func (v *spineSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
+func (s *spineSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
 	return &horus_pb.VCsResponse{}, nil
 }
 
-func (v *spineSrvServer) AddVC(context.Context, *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+func (s *spineSrvServer) AddVC(ctx context.Context, vcInfo *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+	logrus.Debugf("[SpineServer] Adding VC: %d", vcInfo.Id)
+	vc, err := model.NewVC(vcInfo, s.topology)
+	if err != nil {
+		logrus.Warnf("[SpineServer] Adding VC: %d failed: %s", vcInfo.Id, err.Error())
+		return nil, err
+	}
+	if ok, err := s.vcm.AddVC(vc); !ok {
+		return nil, err
+	}
+
+	var leaves []*model.Node
+	for _, leaf := range vc.Leaves.Internal() {
+		leaves = append(leaves, leaf)
+	}
+
+	s.newVCs <- NewVCUpdatedMessage(vcInfo, VCUpdateAdd, leaves)
 	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }
 

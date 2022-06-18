@@ -10,42 +10,6 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-type LeafFailedMessage struct {
-	Leaf *horus_pb.LeafInfo
-	Dsts []*model.Node
-}
-
-type ServerFailedMessage struct {
-	Server *horus_pb.ServerInfo
-	Dsts   []*model.Node
-}
-
-type ServerAddedMessage struct {
-	Server *horus_pb.ServerInfo
-	Dst    *model.Node
-}
-
-type LeafAddedMessage struct {
-	Leaf *horus_pb.LeafInfo
-	Dst  *model.Node
-}
-
-func NewLeafFailedMessage(leaf *horus_pb.LeafInfo, dsts []*model.Node) *LeafFailedMessage {
-	return &LeafFailedMessage{Leaf: leaf, Dsts: dsts}
-}
-
-func NewServerFailedMessage(server *horus_pb.ServerInfo, dsts []*model.Node) *ServerFailedMessage {
-	return &ServerFailedMessage{Server: server, Dsts: dsts}
-}
-
-func NewServerAddedMessage(server *horus_pb.ServerInfo, dst *model.Node) *ServerAddedMessage {
-	return &ServerAddedMessage{Server: server, Dst: dst}
-}
-
-func NewLeafAddedMessage(leaf *horus_pb.LeafInfo, dst *model.Node) *LeafAddedMessage {
-	return &LeafAddedMessage{Leaf: leaf, Dst: dst}
-}
-
 type centralSrvServer struct {
 	horus_pb.UnimplementedHorusServiceServer
 
@@ -53,8 +17,11 @@ type centralSrvServer struct {
 	failedServers chan *ServerFailedMessage
 	newLeaves     chan *LeafAddedMessage
 	newServers    chan *ServerAddedMessage
-	topology      *model.Topology
-	vcm           *core.VCManager
+
+	newVCs chan *VCUpdatedMessage
+
+	topology *model.Topology
+	vcm      *core.VCManager
 }
 
 func NewCentralSrvServer(topology *model.Topology,
@@ -63,6 +30,7 @@ func NewCentralSrvServer(topology *model.Topology,
 	failedServers chan *ServerFailedMessage,
 	newLeaves chan *LeafAddedMessage,
 	newServers chan *ServerAddedMessage,
+	newVCs chan *VCUpdatedMessage,
 ) *centralSrvServer {
 	return &centralSrvServer{
 		topology:      topology,
@@ -71,10 +39,11 @@ func NewCentralSrvServer(topology *model.Topology,
 		failedServers: failedServers,
 		newLeaves:     newLeaves,
 		newServers:    newServers,
+		newVCs:        newVCs,
 	}
 }
 func (s *centralSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
-	logrus.Debugf("[CentralTopoServer] Adding a leaf %d to spine %d", leafInfo.Id, leafInfo.SpineID)
+	logrus.Debugf("[CentralServer] Adding a leaf %d to spine %d", leafInfo.Id, leafInfo.SpineID)
 	leaf, err := s.topology.AddLeafToSpine(leafInfo)
 	if err != nil {
 		logrus.Error(err)
@@ -86,16 +55,16 @@ func (s *centralSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafI
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}
 
-	logrus.Error("[CentralTopoServer] Adding leaf %d failed because it doesn't belong to a spine", leaf.ID)
+	logrus.Error("[CentralServer] Adding leaf %d failed because it doesn't belong to a spine", leaf.ID)
 	return &horus_pb.HorusResponse{Status: "FAILED"}, nil
 }
 
 func (s *centralSrvServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	leafID := uint16(leafInfo.Id)
-	logrus.Debugf("[CentralTopoServer] Failing a leaf %d", leafID)
+	logrus.Debugf("[CentralServer] Failing a leaf %d", leafID)
 	leaf := s.topology.GetNode(leafID, model.NodeType_Leaf)
 	if leaf == nil {
-		logrus.Debugf("[CentralTopoServer] Leaf %d doesn't exist", leafID)
+		logrus.Debugf("[CentralServer] Leaf %d doesn't exist", leafID)
 		return &horus_pb.HorusResponse{Status: "FAILD"}, nil
 	}
 
@@ -133,7 +102,7 @@ func (s *centralSrvServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.Leaf
 }
 
 func (s *centralSrvServer) AddServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
-	logrus.Debugf("[CentralTopoServer] Adding a server %d", serverInfo.Id)
+	logrus.Debugf("[CentralServer] Adding a server %d", serverInfo.Id)
 	server, err := s.topology.AddServerToLeaf(serverInfo, uint16(serverInfo.LeafID))
 	if err != nil {
 		logrus.Error(err)
@@ -146,10 +115,10 @@ func (s *centralSrvServer) AddServer(ctx context.Context, serverInfo *horus_pb.S
 	}
 
 	if server.Parent == nil {
-		logrus.Error("[CentralTopoServer] Adding server %d failed because it doesn't belong to a leaf", server.ID)
+		logrus.Error("[CentralServer] Adding server %d failed because it doesn't belong to a leaf", server.ID)
 	} else {
 		if server.Parent.Parent == nil {
-			logrus.Error("[CentralTopoServer] Adding server %d failed because it doesn't belong to a spine", server.ID)
+			logrus.Error("[CentralServer] Adding server %d failed because it doesn't belong to a spine", server.ID)
 		}
 	}
 	return &horus_pb.HorusResponse{Status: "FAILED"}, nil
@@ -157,10 +126,10 @@ func (s *centralSrvServer) AddServer(ctx context.Context, serverInfo *horus_pb.S
 
 func (s *centralSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {
 	serverID := uint16(serverInfo.Id)
-	logrus.Debugf("[CentralTopoServer] Failing a server %d", serverID)
+	logrus.Debugf("[CentralServer] Failing a server %d", serverID)
 	server := s.topology.GetNode(serverID, model.NodeType_Server)
 	if server == nil {
-		logrus.Debugf("[CentralTopoServer] Server %d doesn't exist", serverID)
+		logrus.Debugf("[CentralServer] Server %d doesn't exist", serverID)
 		return &horus_pb.HorusResponse{Status: "FAILD"}, nil
 	}
 
@@ -183,11 +152,11 @@ func (s *centralSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.
 	for _, spine := range spinesMap.Internal() {
 		spines = append(spines, spine)
 	}
-	logrus.Debugf("[CentralTopoServer] Spines count: %d", len(spines))
+	logrus.Debugf("[CentralServer] Spines count: %d", len(spines))
 
 	detached := s.vcm.DetachServer(serverID)
 	removed, _ := s.topology.RemoveServer(serverID)
-	logrus.Debugf("[CentralTopoServer] Server %d detached? %t, removed? %t", serverID, detached, removed)
+	logrus.Debugf("[CentralServer] Server %d detached? %t, removed? %t", serverID, detached, removed)
 	if removed && detached {
 		s.failedServers <- NewServerFailedMessage(serverInfo, spines)
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
@@ -195,10 +164,10 @@ func (s *centralSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.
 	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }
 
-func (v *centralSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
+func (s *centralSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
 	p, _ := peer.FromContext(ctx)
-	logrus.Debugf("[CentralVCServer] GetVCs() called by %s", p.Addr.String())
-	vcs := v.vcm.GetVCs()
+	logrus.Debugf("[CentralServer] GetVCs() called by %s", p.Addr.String())
+	vcs := s.vcm.GetVCs()
 	rsp := &horus_pb.VCsResponse{}
 	for _, vc := range vcs {
 		vcInfo := &horus_pb.VCInfo{}
@@ -216,7 +185,23 @@ func (v *centralSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_p
 	return rsp, nil
 }
 
-func (v *centralSrvServer) AddVC(context.Context, *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+func (s *centralSrvServer) AddVC(ctx context.Context, vcInfo *horus_pb.VCInfo) (*horus_pb.HorusResponse, error) {
+	logrus.Debugf("[CentralServer] Adding VC: %d", vcInfo.Id)
+	vc, err := model.NewVC(vcInfo, s.topology)
+	if err != nil {
+		logrus.Warnf("[CentralServer] Adding VC: %d failed: %s", vcInfo.Id, err.Error())
+		return nil, err
+	}
+	if ok, err := s.vcm.AddVC(vc); !ok {
+		return nil, err
+	}
+
+	var spines []*model.Node
+	for _, spine := range vc.Spines.Internal() {
+		spines = append(spines, spine)
+	}
+
+	s.newVCs <- NewVCUpdatedMessage(vcInfo, VCUpdateAdd, spines)
 	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }
 
