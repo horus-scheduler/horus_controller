@@ -196,6 +196,9 @@ func test_fail_three_servers_then_leaf(pool *grpcpool.Pool) {
 }
 
 func test_add_two_servers(pool *grpcpool.Pool) {
+	time.Sleep(5 * time.Second)
+	addLeaf(pool, 0, 0, "0.0.0.0:6001", "0.0.0.0:7001")
+	time.Sleep(5 * time.Second)
 	// This one should succeed
 	addServer(pool, 9, 1, 8, "", 0)
 	// This one should fail
@@ -213,13 +216,13 @@ func test_add_leaf_with_servers_then_fail(pool *grpcpool.Pool) {
 }
 
 func main() {
-	pool := createPool()
+	// pool := createPool()
 	// test_fail_three_servers_then_leaf(pool)
 	// test_add_two_servers(pool)
 	// test_add_leaf_with_servers_then_fail(pool)
 
-	addVC(pool, 2, []uint32{0}, []uint32{2, 3, 4})
-	time.Sleep(2 * time.Second)
-	removeVC(pool, 2)
+	// addVC(pool, 2, []uint32{0}, []uint32{2, 3, 4})
+	// time.Sleep(2 * time.Second)
+	// removeVC(pool, 2)
 	// getVCs(vcPool)
 }

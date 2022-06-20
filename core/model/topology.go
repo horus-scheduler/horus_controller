@@ -65,6 +65,15 @@ func NewDCNTopology(topoCfg *topoRootConfig) *Topology {
 	return s
 }
 
+func (s *Topology) ClearLeaves() {
+	for _, spine := range s.Spines.Internal() {
+		spine.Children = nil
+	}
+
+	s.Leaves = NewNodeMap()
+	s.Servers = NewNodeMap()
+}
+
 func (s *Topology) GetNode(nodeId uint16, nodeType NodeType) *Node {
 	var nodes *NodeMap
 	if nodeType == NodeType_Server {

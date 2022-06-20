@@ -56,6 +56,13 @@ func WithExtraLeaf(leafInfo *horus_pb.LeafInfo) TopologyOption {
 	}
 }
 
+func WithoutLeaves() TopologyOption {
+	return func(topo *model.Topology) error {
+		topo.ClearLeaves()
+		return nil
+	}
+}
+
 func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig, opts ...TopologyOption) *leafController {
 	topoCfg := model.ReadTopologyFile(topoFp)
 	topology := model.NewDCNTopology(topoCfg)
@@ -194,6 +201,7 @@ func (c *leafController) Shutdown() {
 		Infof("[Leaf] Shutting down leaf switch controller")
 	c.bus.DoneChan <- true
 	c.healthMgr.DoneChan <- true
+	c.rpcEndPoint.DoneChan <- true
 	close(c.asicEgress)
 	close(c.asicIngress)
 	close(c.bus.hmMsg)

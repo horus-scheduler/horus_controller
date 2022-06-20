@@ -27,8 +27,9 @@ type LeafRpcEndpoint struct {
 	newServersEgExt     chan *ServerAddedMessage
 	newVCsEgExt         chan *VCUpdatedMessage
 
+	rpcServer       *grpc.Server
 	centralConnPool *grpcpool.Pool
-	doneChan        chan bool
+	DoneChan        chan bool
 }
 
 func NewLeafRpcEndpoint(srvLAddr, srvCentralAddr string,
@@ -46,7 +47,7 @@ func NewLeafRpcEndpoint(srvLAddr, srvCentralAddr string,
 		updatedServersEgExt: updatedServers,
 		newServersEgExt:     newServers,
 		newVCsEgExt:         newVCs,
-		doneChan:            make(chan bool, 1),
+		DoneChan:            make(chan bool, 1),
 	}
 }
 
@@ -57,12 +58,12 @@ func (s *LeafRpcEndpoint) createServiceListener() error {
 		return err
 	}
 	logrus.Infof("[LeafRPC] Creating topologyServer at %s", s.SrvLAddr)
-	rpcServer := grpc.NewServer()
+	s.rpcServer = grpc.NewServer()
 	topoServer := NewLeafSrvServer(s.topology, s.vcm,
 		s.updatedServersEgExt,
 		s.newServersEgExt, s.newVCsEgExt)
-	horus_pb.RegisterHorusServiceServer(rpcServer, topoServer)
-	return rpcServer.Serve(lis)
+	horus_pb.RegisterHorusServiceServer(s.rpcServer, topoServer)
+	return s.rpcServer.Serve(lis)
 }
 
 func (s *LeafRpcEndpoint) createConnPool() {
@@ -98,6 +99,21 @@ func (s *LeafRpcEndpoint) GetVCs() ([]*horus_pb.VCInfo, error) {
 }
 
 func (s *LeafRpcEndpoint) processEvents() {
+	for {
+		stop := false
+		if stop {
+			break
+		}
+		select {
+		case <-s.DoneChan:
+			logrus.Infof("[LeafRPC] Shutting down the server at: %s", s.SrvLAddr)
+			s.centralConnPool.Close()
+			s.rpcServer.Stop()
+			stop = true
+		default:
+			continue
+		}
+	}
 }
 
 func (s *LeafRpcEndpoint) Start() {
@@ -110,5 +126,4 @@ func (s *LeafRpcEndpoint) Start() {
 	// Let's send any outstanding events
 	go s.processEvents()
 
-	<-s.doneChan
 }

@@ -121,7 +121,9 @@ func (sc *switchManager) Run() {
 			logrus.Debugf("[Manager] Adding leaf %d", leafID)
 			sc.Lock()
 			logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
-			leafCtrl := NewLeafController(leafID, sc.topoFp, sc.cfg, WithExtraLeaf(newLeaf.Leaf))
+			leafCtrl := NewLeafController(leafID, sc.topoFp, sc.cfg,
+				WithoutLeaves(),
+				WithExtraLeaf(newLeaf.Leaf))
 			leaf := leafCtrl.topology.GetNode(leafID, model.NodeType_Leaf)
 			if leaf != nil {
 				sc.leaves = append(sc.leaves, leafCtrl)
