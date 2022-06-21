@@ -1,6 +1,7 @@
 package net
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/golang/protobuf/ptypes/empty"
@@ -35,6 +36,11 @@ func NewLeafSrvServer(topology *model.Topology,
 		newVCs:         newVCs,
 	}
 }
+
+func (s *leafSrvServer) GetTopology(context.Context, *empty.Empty) (*horus_pb.TopoInfo, error) {
+	return nil, errors.New("GetTopology isn't supported by leaf")
+}
+
 func (s *leafSrvServer) AddLeaf(ctx context.Context, leaf *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	return &horus_pb.HorusResponse{Status: "NOT_SUPPORTED"}, nil
 }
@@ -84,6 +90,8 @@ func (s *leafSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.Ser
 	if len(updated) > 0 {
 		s.updatedServers <- core.NewLeafHealthMsg(true, updated)
 	}
+
+	s.vcm.Debug()
 
 	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }

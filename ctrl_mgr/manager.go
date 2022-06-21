@@ -58,7 +58,7 @@ func NewSwitchManager(topoFp, cfgFp string, opts ...SwitchManagerOption) *switch
 	var leaves []*leafController
 	var spines []*spineController
 	for _, ctrlID := range cfg.LeafIDs {
-		newCtrl := NewLeafController(ctrlID, topoFp, cfg)
+		newCtrl := NewBareLeafController(ctrlID, cfg)
 		leaves = append(leaves, newCtrl)
 	}
 	for _, ctrlID := range cfg.SpineIDs {
@@ -111,7 +111,7 @@ func (sc *switchManager) Run() {
 	time.Sleep(time.Second)
 
 	for _, l := range sc.leaves {
-		go l.Start()
+		go l.StartBare(true)
 	}
 
 	for {
@@ -121,16 +121,20 @@ func (sc *switchManager) Run() {
 			logrus.Debugf("[Manager] Adding leaf %d", leafID)
 			sc.Lock()
 			logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
-			leafCtrl := NewLeafController(leafID, sc.topoFp, sc.cfg,
-				WithoutLeaves(),
-				WithExtraLeaf(newLeaf.Leaf))
-			leaf := leafCtrl.topology.GetNode(leafID, model.NodeType_Leaf)
-			if leaf != nil {
-				sc.leaves = append(sc.leaves, leafCtrl)
-				sc.asicEndPoint.AddLeafCtrl(leafCtrl)
-				go leafCtrl.Start()
-			} else {
-				logrus.Errorf("[Manager] Leaf %d was not added", leafID)
+			// leafCtrl := NewLeafController(leafID, sc.topoFp, sc.cfg,
+			// 	WithoutLeaves(),
+			// 	WithExtraLeaf(newLeaf.Leaf))
+			leafCtrl := NewBareLeafController(leafID, sc.cfg)
+			err := leafCtrl.FetchTopology()
+			if err == nil {
+				leaf := leafCtrl.topology.GetNode(leafID, model.NodeType_Leaf)
+				if leaf != nil {
+					sc.leaves = append(sc.leaves, leafCtrl)
+					sc.asicEndPoint.AddLeafCtrl(leafCtrl)
+					go leafCtrl.StartBare(false)
+				} else {
+					logrus.Errorf("[Manager] Leaf %d was not added", leafID)
+				}
 			}
 			logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
 			sc.Unlock()

@@ -1,6 +1,7 @@
 package net
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/golang/protobuf/ptypes/empty"
@@ -41,6 +42,11 @@ func NewSpineSrvServer(topology *model.Topology,
 		newVCs:             newVCs,
 	}
 }
+
+func (s *spineSrvServer) GetTopology(context.Context, *empty.Empty) (*horus_pb.TopoInfo, error) {
+	return nil, errors.New("GetTopology isn't supported by spine")
+}
+
 func (s *spineSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	logrus.Debugf("[SpineTopoServer] Adding a leaf %d to spine %d", leafInfo.Id, leafInfo.SpineID)
 	leaf, err := s.topology.AddLeafToSpine(leafInfo)

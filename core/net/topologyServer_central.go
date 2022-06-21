@@ -44,6 +44,13 @@ func NewCentralSrvServer(topology *model.Topology,
 		newVCs:        newVCs,
 	}
 }
+
+func (s *centralSrvServer) GetTopology(context.Context, *empty.Empty) (*horus_pb.TopoInfo, error) {
+	logrus.Debugf("[CentralServer] GetTopology() is called")
+	topoInfo := s.topology.EncodeToTopoInfo()
+	return topoInfo, nil
+}
+
 func (s *centralSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	logrus.Debugf("[CentralServer] Adding a leaf %d to spine %d", leafInfo.Id, leafInfo.SpineID)
 	leaf, err := s.topology.AddLeafToSpine(leafInfo)

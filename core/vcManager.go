@@ -206,7 +206,7 @@ func (vcm *VCManager) DetachServer(serverID uint16) bool {
 	firstDetach := false
 	if found {
 		for _, vc := range vcs {
-			serverDetached, leafDetached := vc.DetachServer(serverID)
+			serverDetached, detachLeaf := vc.DetachServer(serverID)
 			if !firstDetach {
 				detached = serverDetached
 				firstDetach = true
@@ -214,9 +214,13 @@ func (vcm *VCManager) DetachServer(serverID uint16) bool {
 				detached = detached && serverDetached
 			}
 			server := vcm.topology.GetNode(serverID, model.NodeType_Server)
-			if leafDetached && server.Parent != nil {
+			if detachLeaf && server.Parent != nil {
 				logrus.Debugf("[VC Mgr] Removing VC %d from leaf %d after detaching server %d", vc.ClusterID, server.Parent.ID, serverID)
+				vc.Leaves.Delete(server.Parent.ID)
 				vcm.leafVCs.RemoveFromVCList(server.Parent.ID, vc)
+			}
+			if len(vc.Servers.Internal()) == 0 {
+				vcm.RemoveVC(vc)
 			}
 		}
 	}
@@ -238,6 +242,9 @@ func (vcm *VCManager) DetachLeaf(leafID uint16) bool {
 			detached = detached && leafDetached
 			for _, srv := range detachedServers {
 				vcm.serverVCs.RemoveFromVCList(srv.ID, vc)
+			}
+			if len(vc.Servers.Internal()) == 0 {
+				vcm.RemoveVC(vc)
 			}
 		}
 	}

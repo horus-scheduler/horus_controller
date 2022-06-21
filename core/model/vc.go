@@ -99,7 +99,7 @@ func (vc *VirtualCluster) DetachLeaf(leafID uint16) (bool, []*Node) {
 	isDetached := false
 	var detachedServers []*Node
 	if leaf, ok := vc.Leaves.Load(leafID); ok {
-		detachLeaf := false
+		// detachLeaf := false
 		for _, server := range leaf.Children {
 			logrus.Debugf("[VC] Removing server %d", server.ID)
 			serverDetached, detachLeaf := vc.DetachServer(server.ID)
@@ -109,11 +109,11 @@ func (vc *VirtualCluster) DetachLeaf(leafID uint16) (bool, []*Node) {
 			logrus.Debugf("[VC] Server %d Removed? %t", server.ID, serverDetached)
 			isDetached = isDetached || detachLeaf
 		}
-		if detachLeaf {
-			vc.Leaves.Delete(leaf.ID)
-		}
+		// if detachLeaf {
+		vc.Leaves.Delete(leaf.ID)
+		// }
 	}
-	logrus.Debug("[VC] Leaf %d removed? %t", leafID, isDetached)
+	logrus.Debugf("[VC] Leaf %d removed? %t", leafID, isDetached)
 	return isDetached, detachedServers
 }
 

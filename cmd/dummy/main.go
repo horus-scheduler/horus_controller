@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
@@ -12,6 +13,46 @@ import (
 )
 
 // Topology-related APIs
+
+func getTopology(pool *grpcpool.Pool) {
+	conn, err := pool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
+	}
+	defer conn.Close()
+
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
+	topo, _ := client.GetTopology(context.Background(), &empty.Empty{})
+	for _, spineInfo := range topo.Spines {
+
+		logrus.Infof("- Spine: %d", spineInfo.Id)
+		for _, leafInfo := range spineInfo.Leaves {
+			leafFirstWorkerID := 0
+			leafLastWorkerID := 0
+			var lines []string
+			for _, serverInfo := range leafInfo.Servers {
+				if leafLastWorkerID > 0 {
+					leafLastWorkerID += 1
+				}
+				serverFWID := leafLastWorkerID
+				serverLWID := leafLastWorkerID
+				if serverInfo.WorkersCount > 0 {
+					serverLWID += int(serverInfo.WorkersCount) - 1
+					leafLastWorkerID = serverLWID
+				}
+				serverLine := fmt.Sprintf("--- Server: %d, First WID: %d, last WID: %d",
+					serverInfo.Id, serverFWID, serverLWID)
+				lines = append(lines, serverLine)
+			}
+
+			logrus.Infof("-- Leaf: %d, First WID: %d, Last WID: %d",
+				leafInfo.Id, leafFirstWorkerID, leafLastWorkerID)
+			for _, line := range lines {
+				logrus.Info(line)
+			}
+		}
+	}
+}
 
 func failLeaf(pool *grpcpool.Pool, leafID uint32) {
 	conn, err := pool.Get(context.Background())
@@ -208,21 +249,24 @@ func test_add_two_servers(pool *grpcpool.Pool) {
 func test_add_leaf_with_servers_then_fail(pool *grpcpool.Pool) {
 	addLeaf(pool, 3, 0, "0.0.0.0:6004", "0.0.0.0:7001")
 	time.Sleep(5 * time.Second)
-	addServer(pool, 9, 1, 8, "", 3)
-	time.Sleep(time.Second)
 	addServer(pool, 10, 1, 8, "", 3)
+	time.Sleep(time.Second)
+	addServer(pool, 11, 1, 8, "", 3)
 	time.Sleep(time.Second)
 	failLeaf(pool, 3)
 }
 
 func main() {
-	// pool := createPool()
-	// test_fail_three_servers_then_leaf(pool)
+	pool := createPool()
+	// getTopology(pool)
+
+	test_fail_three_servers_then_leaf(pool)
 	// test_add_two_servers(pool)
 	// test_add_leaf_with_servers_then_fail(pool)
 
-	// addVC(pool, 2, []uint32{0}, []uint32{2, 3, 4})
-	// time.Sleep(2 * time.Second)
-	// removeVC(pool, 2)
-	// getVCs(vcPool)
+	time.Sleep(5 * time.Second)
+	addVC(pool, 2, []uint32{0}, []uint32{3, 4, 6})
+	time.Sleep(2 * time.Second)
+	removeVC(pool, 2)
+	// getVCs(pool)
 }

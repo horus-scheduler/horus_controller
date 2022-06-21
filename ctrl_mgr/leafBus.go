@@ -53,19 +53,34 @@ type LeafBus struct {
 }
 
 // NewLeafBus ...
-func NewLeafBus(ctrlID uint16, busChan *LeafBusChan,
-	healthMgr *core.LeafHealthManager,
-	topology *model.Topology,
-	vcm *core.VCManager,
+func NewBareLeafBus(ctrlID uint16, busChan *LeafBusChan,
 	bfrt *bfrtC.Client) *LeafBus {
 	return &LeafBus{
 		LeafBusChan: busChan,
 		ctrlID:      ctrlID,
-		healthMgr:   healthMgr,
-		topology:    topology,
-		vcm:         vcm,
-		bfrt:        bfrt,
-		DoneChan:    make(chan bool, 1),
+		// healthMgr:   healthMgr,
+		// topology:    topology,
+		// vcm:         vcm,
+		bfrt:     bfrt,
+		DoneChan: make(chan bool, 1),
+	}
+}
+
+func (e *LeafBus) SetHealthManager(healthMgr *core.LeafHealthManager) {
+	if e.healthMgr == nil {
+		e.healthMgr = healthMgr
+	}
+}
+
+func (e *LeafBus) SetTopology(topology *model.Topology) {
+	if e.topology == nil {
+		e.topology = topology
+	}
+}
+
+func (e *LeafBus) SetVCManager(vcm *core.VCManager) {
+	if e.vcm == nil {
+		e.vcm = vcm
 	}
 }
 

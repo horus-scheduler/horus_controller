@@ -1,6 +1,7 @@
 package ctrl_mgr
 
 import (
+	"fmt"
 	"time"
 
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
@@ -63,16 +64,14 @@ func WithoutLeaves() TopologyOption {
 	}
 }
 
-func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig, opts ...TopologyOption) *leafController {
-	topoCfg := model.ReadTopologyFile(topoFp)
-	topology := model.NewDCNTopology(topoCfg)
-	vcm := core.NewVCManager(topology)
-	for _, opt := range opts {
-		err := opt(topology)
-		if err != nil {
-			logrus.Error(err)
-		}
-	}
+func NewBareLeafController(ctrlID uint16, cfg *rootConfig, opts ...TopologyOption) *leafController {
+	// create RPC endpoint (without VCM or Topology)
+	// run rpc.GetTopology()
+	// create Topology
+	// create VCM
+	// attach topology and VCM to RPC endpoint
+	// create HM
+	// create leaf bus
 
 	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
 	asicIngress := make(chan []byte, horus_net.DefaultUnixSockRecvSize)
@@ -84,34 +83,20 @@ func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig, opts ...To
 	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(ctrlID), target)
 
-	healthMgr, err := core.NewLeafHealthManager(ctrlID, hmEgress, topology, vcm, cfg.Timeout)
-	if err != nil {
-		logrus.Fatal(err)
-	}
-
-	leaf, _ := topology.Leaves.Load(ctrlID)
-	if leaf == nil {
-		logrus.Fatal("[Leaf] Leaf %d doesn't exist in the topology", ctrlID)
-	}
-
-	rpcEndPoint := horus_net.NewLeafRpcEndpoint(leaf.Address,
-		cfg.RemoteSrvServer,
-		topology,
-		vcm,
+	rpcEndPoint := horus_net.NewBareLeafRpcEndpoint(cfg.RemoteSrvServer,
 		updatedServersRPC,
 		newServersRPC,
 		newVCsRPC)
-
 	ch := NewLeafBusChan(hmEgress, updatedServersRPC, newServersRPC, newVCsRPC, asicIngress, asicEgress)
-	bus := NewLeafBus(ctrlID, ch, healthMgr, topology, vcm, bfrt)
+	bus := NewBareLeafBus(ctrlID, ch, bfrt)
 	return &leafController{
 		rpcEndPoint: rpcEndPoint,
-		healthMgr:   healthMgr,
 		bus:         bus,
+		// healthMgr:   healthMgr,
 		controller: &controller{
+			// topology:    topology,
+			// vcm:         vcm,
 			ID:          ctrlID,
-			topology:    topology,
-			vcm:         vcm,
 			cfg:         cfg,
 			bfrt:        bfrt,
 			asicIngress: asicIngress,
@@ -122,7 +107,7 @@ func NewLeafController(ctrlID uint16, topoFp string, cfg *rootConfig, opts ...To
 
 func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineController {
 	topoCfg := model.ReadTopologyFile(topoFp)
-	topology := model.NewDCNTopology(topoCfg)
+	topology := model.NewDCNFromConf(topoCfg)
 	vcm := core.NewVCManager(topology)
 
 	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
@@ -190,6 +175,102 @@ func (c *leafController) Start() {
 			}
 		}
 	}
+
+	go c.healthMgr.Start()
+	go c.bus.Start()
+}
+
+func (c *leafController) FetchTopology() error {
+	go c.rpcEndPoint.StartClient()
+	logrus.Debugf("[Leaf] Fetching the current topology from %s", c.rpcEndPoint.SrvCentralAddr)
+	time.Sleep(time.Second)
+	topoInfo, err := c.rpcEndPoint.GetTopology()
+	if topoInfo == nil {
+		logrus.Errorf("[Leaf] No topology was fetched from %s", c.rpcEndPoint.SrvCentralAddr)
+	}
+	if err != nil {
+		logrus.Errorf(err.Error())
+	}
+
+	topo := model.NewDCNFromTopoInfo(topoInfo)
+	c.topology = topo
+	leaf, _ := c.topology.Leaves.Load(c.ID)
+	if leaf == nil {
+		logrus.Fatalf("[Leaf] Leaf %d doesn't exist in the topology", c.ID)
+		return fmt.Errorf("leaf %d doesn't exist in the topology", c.ID)
+	}
+
+	// c.topology.Debug()
+
+	c.vcm = core.NewVCManager(c.topology)
+	c.rpcEndPoint.SetVCManager(c.vcm)
+	c.rpcEndPoint.SetLocalAddress(leaf.Address)
+	c.rpcEndPoint.SetTopology(c.topology)
+	c.rpcEndPoint.StartServer()
+	return nil
+}
+
+func (c *leafController) FetchVCs() error {
+	logrus.Debugf("[Leaf] Fetching all VCs from %s", c.rpcEndPoint.SrvCentralAddr)
+	time.Sleep(time.Second)
+	vcs, err := c.rpcEndPoint.GetVCs()
+	if len(vcs) == 0 {
+		logrus.Warnf("[Leaf] No VCs were fetched from %s", c.rpcEndPoint.SrvCentralAddr)
+	} else {
+		logrus.Debugf("[Leaf] %d VCs were fetched", len(vcs))
+	}
+	if err != nil {
+		logrus.Error(err)
+		return err
+	}
+
+	for _, vcConf := range vcs {
+		vc, err := model.NewVC(vcConf, c.topology)
+		if err != nil {
+			logrus.Error(err)
+		} else {
+			c.vcm.AddVC(vc)
+		}
+	}
+
+	return nil
+}
+
+func (c *leafController) CreateHealthManager() error {
+	healthMgr, err := core.NewLeafHealthManager(c.ID, c.bus.hmMsg, c.topology, c.vcm, c.cfg.Timeout)
+	if err != nil {
+		return err
+	}
+	c.healthMgr = healthMgr
+	return nil
+}
+
+func (c *leafController) StartBare(fetchTopo bool) {
+	logrus.
+		WithFields(logrus.Fields{"ID": c.ID}).
+		Infof("[Leaf] Starting leaf switch controller")
+	c.controller.Start()
+
+	if fetchTopo {
+		err := c.FetchTopology()
+		if err != nil {
+			logrus.Fatal(err)
+		}
+	}
+
+	err := c.FetchVCs()
+	if err != nil {
+		logrus.Error(err)
+	}
+
+	err = c.CreateHealthManager()
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
+	c.bus.SetHealthManager(c.healthMgr)
+	c.bus.SetTopology(c.topology)
+	c.bus.SetVCManager(c.vcm)
 
 	go c.healthMgr.Start()
 	go c.bus.Start()

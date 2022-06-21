@@ -23,6 +23,16 @@ message VCServerInfo {
     repeated uint32 workersIDs = 2;
 }
 
+message TopoInfo {
+    repeated SpineInfo spines = 1;
+}
+
+message SpineInfo {
+    uint32 id = 1;
+    string address = 2;
+    repeated LeafInfo leaves = 3;
+}
+
 message LeafInfo {
     uint32 id = 1;
     string address = 2;
@@ -40,11 +50,14 @@ message ServerInfo {
 }
 
 service HorusService {
+    // Topology-related APIs
+    rpc GetTopology(google.protobuf.Empty) returns (TopoInfo) {}
     rpc AddLeaf(LeafInfo) returns (HorusResponse) {}
     rpc FailLeaf(LeafInfo) returns (HorusResponse) {}
     rpc AddServer(ServerInfo) returns (HorusResponse) {}
     rpc FailServer(ServerInfo) returns (HorusResponse) {}
 
+    // VC-related APIs
     rpc GetVCs(google.protobuf.Empty) returns (VCsResponse) {}
     rpc AddVC(VCInfo) returns (HorusResponse) {}
     rpc RemoveVC(VCInfo) returns (HorusResponse) {}

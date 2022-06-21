@@ -41,7 +41,7 @@ func NewCentralController(opts ...CentralControllerOption) *centralController {
 	initLogger(binCfg)
 
 	logrus.Info("[Central] Initializing Topology and VC Manager...")
-	topology := model.NewDCNTopology(topoCfg)
+	topology := model.NewDCNFromConf(topoCfg)
 	vcm := core.NewVCManager(topology)
 	for _, vcConf := range vcsConf.VCs {
 		vc, err := model.NewVC(vcConf, topology)

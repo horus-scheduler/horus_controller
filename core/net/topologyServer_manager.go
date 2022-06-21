@@ -1,6 +1,8 @@
 package net
 
 import (
+	"errors"
+
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
@@ -26,6 +28,11 @@ func NewManagerSrvServer(
 		newLeaves:    newLeaves,
 	}
 }
+
+func (s *managerSrvServer) GetTopology(context.Context, *empty.Empty) (*horus_pb.TopoInfo, error) {
+	return nil, errors.New("GetTopology isn't supported by manager")
+}
+
 func (s *managerSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	leafID := uint16(leafInfo.Id)
 	logrus.Debugf("[ManagerTopoServer] Add leaf %d", leafID)

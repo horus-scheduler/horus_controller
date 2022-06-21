@@ -18,7 +18,7 @@ type Topology struct {
 	Cores   *NodeMap
 }
 
-func NewDCNTopology(topoCfg *topoRootConfig) *Topology {
+func NewDCNFromConf(topoCfg *topoRootConfig) *Topology {
 	s := &Topology{
 		Servers: NewNodeMap(),
 		Leaves:  NewNodeMap(),
@@ -53,6 +53,8 @@ func NewDCNTopology(topoCfg *topoRootConfig) *Topology {
 				// worker IDs are contigous for Servers belonging to the same Leaf
 				server.FirstWorkerID = workerID
 				workerID += serverConf.WorkersCount
+				// if workerID == 0 -> server.LastWorkerID = 0
+				// When server.FirstWorkerID == server.LastWorkerID = 0 -> this server has no workers
 				server.LastWorkerID = workerID - 1
 
 				s.Servers.Store(server.ID, server)
@@ -63,6 +65,91 @@ func NewDCNTopology(topoCfg *topoRootConfig) *Topology {
 	}
 
 	return s
+}
+
+func NewDCNFromTopoInfo(topoInfo *horus_pb.TopoInfo) *Topology {
+	s := &Topology{
+		Servers: NewNodeMap(),
+		Leaves:  NewNodeMap(),
+		Spines:  NewNodeMap(),
+		Cores:   NewNodeMap(),
+	}
+
+	s.Root = NewNode("", "", 0, 0, NodeType_Core)
+	s.Root.Parent = nil
+	s.Cores.Store(s.Root.ID, s.Root)
+
+	for _, spineInfo := range topoInfo.Spines {
+		spine := NewNode(spineInfo.Address, "", uint16(spineInfo.Id), 0, NodeType_Spine)
+		spine.Parent = s.Root
+		s.Root.Children = append(s.Root.Children, spine)
+		s.Spines.Store(spine.ID, spine)
+
+		for _, leafInfo := range spineInfo.Leaves {
+			// workerIDs are local per leaf
+			var workerID uint16 = 0
+			leaf := NewNode(leafInfo.Address, leafInfo.MgmtAddress, uint16(leafInfo.Id), 0, NodeType_Leaf)
+			leaf.Parent = spine
+			spine.Children = append(spine.Children, leaf)
+			leaf.FirstWorkerID = workerID
+			for _, serverInfo := range leafInfo.Servers {
+				server := NewNode(serverInfo.Address, "",
+					uint16(serverInfo.Id),
+					uint16(serverInfo.PortId),
+					NodeType_Server)
+				server.Parent = leaf
+				leaf.Children = append(leaf.Children, server)
+				// Set worker IDs per Server
+				// worker IDs are contigous for Servers belonging to the same Leaf
+				server.FirstWorkerID = workerID
+				workerID += uint16(serverInfo.WorkersCount)
+				// if workerID == 0 -> server.LastWorkerID = 0
+				// When server.FirstWorkerID == server.LastWorkerID = 0 -> this server has no workers
+				server.LastWorkerID = workerID - 1
+
+				s.Servers.Store(server.ID, server)
+			}
+			leaf.LastWorkerID = workerID - 1
+			s.Leaves.Store(leaf.ID, leaf)
+		}
+	}
+
+	return s
+}
+
+func (s *Topology) EncodeToTopoInfo() *horus_pb.TopoInfo {
+	topoInfo := &horus_pb.TopoInfo{}
+	for _, spine := range s.Spines.Internal() {
+		spineInfo := &horus_pb.SpineInfo{Id: uint32(spine.ID), Address: spine.Address}
+		topoInfo.Spines = append(topoInfo.Spines, spineInfo)
+		spine.RLock()
+		for _, leaf := range spine.Children {
+			leafInfo := &horus_pb.LeafInfo{}
+			leaf.RLock()
+			leafInfo.Id = uint32(leaf.ID)
+			leafInfo.Address = leaf.Address
+			leafInfo.MgmtAddress = leaf.MgmtAddress
+			leafInfo.SpineID = uint32(spine.ID)
+			for _, server := range leaf.Children {
+				serverInfo := &horus_pb.ServerInfo{}
+				server.RLock()
+				serverInfo.Id = uint32(server.ID)
+				serverInfo.Address = server.Address
+				serverInfo.PortId = uint32(server.PortId)
+				var workersCount uint16 = 0
+				if server.LastWorkerID > server.FirstWorkerID {
+					workersCount = server.LastWorkerID - server.FirstWorkerID + 1
+				}
+				serverInfo.WorkersCount = uint32(workersCount)
+				server.RUnlock()
+				leafInfo.Servers = append(leafInfo.Servers, serverInfo)
+			}
+			leaf.RUnlock()
+			spineInfo.Leaves = append(spineInfo.Leaves, leafInfo)
+		}
+		spine.RUnlock()
+	}
+	return topoInfo
 }
 
 func (s *Topology) ClearLeaves() {
