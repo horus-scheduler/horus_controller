@@ -152,6 +152,50 @@ func (s *Topology) EncodeToTopoInfo() *horus_pb.TopoInfo {
 	return topoInfo
 }
 
+func (s *Topology) EncodeToTopoInfoAtLeaf(leafInfo *horus_pb.LeafInfo) *horus_pb.TopoInfo {
+	topoInfo := &horus_pb.TopoInfo{}
+	leaf := s.GetNode(uint16(leafInfo.Id), NodeType_Leaf)
+	if leaf == nil {
+		return nil
+	}
+	if leaf.Parent == nil {
+		return nil
+	}
+
+	spine := s.GetNode(leaf.Parent.ID, NodeType_Spine)
+	spineInfo := &horus_pb.SpineInfo{Id: uint32(spine.ID), Address: spine.Address}
+	topoInfo.Spines = append(topoInfo.Spines, spineInfo)
+
+	retLeafInfo := &horus_pb.LeafInfo{}
+
+	spine.RLock()
+	retLeafInfo.SpineID = uint32(spine.ID)
+	spine.RUnlock()
+
+	leaf.RLock()
+	retLeafInfo.Id = uint32(leaf.ID)
+	retLeafInfo.Address = leaf.Address
+	retLeafInfo.MgmtAddress = leaf.MgmtAddress
+	for _, server := range leaf.Children {
+		serverInfo := &horus_pb.ServerInfo{}
+		server.RLock()
+		serverInfo.Id = uint32(server.ID)
+		serverInfo.Address = server.Address
+		serverInfo.PortId = uint32(server.PortId)
+		var workersCount uint16 = 0
+		if server.LastWorkerID > server.FirstWorkerID {
+			workersCount = server.LastWorkerID - server.FirstWorkerID + 1
+		}
+		serverInfo.WorkersCount = uint32(workersCount)
+		server.RUnlock()
+		retLeafInfo.Servers = append(retLeafInfo.Servers, serverInfo)
+	}
+	leaf.RUnlock()
+	spineInfo.Leaves = append(spineInfo.Leaves, retLeafInfo)
+
+	return topoInfo
+}
+
 func (s *Topology) ClearLeaves() {
 	for _, spine := range s.Spines.Internal() {
 		spine.Children = nil

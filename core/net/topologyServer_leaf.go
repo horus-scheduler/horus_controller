@@ -41,6 +41,10 @@ func (s *leafSrvServer) GetTopology(context.Context, *empty.Empty) (*horus_pb.To
 	return nil, errors.New("GetTopology isn't supported by leaf")
 }
 
+func (s *leafSrvServer) GetTopologyAtLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.TopoInfo, error) {
+	return nil, errors.New("GetTopologyAtLeaf isn't supported by leaf")
+}
+
 func (s *leafSrvServer) AddLeaf(ctx context.Context, leaf *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	return &horus_pb.HorusResponse{Status: "NOT_SUPPORTED"}, nil
 }
@@ -97,6 +101,10 @@ func (s *leafSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.Ser
 }
 
 func (s *leafSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
+	return &horus_pb.VCsResponse{}, nil
+}
+
+func (s *leafSrvServer) GetVCsOfLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.VCsResponse, error) {
 	return &horus_pb.VCsResponse{}, nil
 }
 

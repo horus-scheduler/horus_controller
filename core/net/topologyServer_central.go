@@ -51,6 +51,15 @@ func (s *centralSrvServer) GetTopology(context.Context, *empty.Empty) (*horus_pb
 	return topoInfo, nil
 }
 
+func (s *centralSrvServer) GetTopologyAtLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.TopoInfo, error) {
+	logrus.Debugf("[CentralServer] GetTopologyAtLeaf(%d) is called", leafInfo.Id)
+	topoInfo := s.topology.EncodeToTopoInfoAtLeaf(leafInfo)
+	if topoInfo == nil {
+		return nil, fmt.Errorf("couldn't return TopoInfo for leaf %d", leafInfo.Id)
+	}
+	return topoInfo, nil
+}
+
 func (s *centralSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	logrus.Debugf("[CentralServer] Adding a leaf %d to spine %d", leafInfo.Id, leafInfo.SpineID)
 	leaf, err := s.topology.AddLeafToSpine(leafInfo)
@@ -185,6 +194,34 @@ func (s *centralSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_p
 			serverInfo := &horus_pb.VCServerInfo{}
 			serverInfo.Id = uint32(server.ID)
 			vcInfo.Servers = append(vcInfo.Servers, serverInfo)
+		}
+		for _, spine := range vc.Spines.Internal() {
+			vcInfo.Spines = append(vcInfo.Spines, uint32(spine.ID))
+		}
+		rsp.Vcs = append(rsp.Vcs, vcInfo)
+	}
+	return rsp, nil
+}
+
+func (s *centralSrvServer) GetVCsOfLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.VCsResponse, error) {
+	p, _ := peer.FromContext(ctx)
+	logrus.Debugf("[CentralServer] GetVCsOfLeaf(%d) called by %s", leafInfo.Id, p.Addr.String())
+	vcs, found := s.vcm.GetVCsOfLeaf(uint16(leafInfo.Id))
+	leaf := s.topology.GetNode(uint16(leafInfo.Id), model.NodeType_Leaf)
+	if !found || leaf == nil {
+		return nil, fmt.Errorf("virtual clusters for leaf %d don't exist", leafInfo.Id)
+	}
+
+	rsp := &horus_pb.VCsResponse{}
+	for _, vc := range vcs {
+		vcInfo := &horus_pb.VCInfo{}
+		vcInfo.Id = uint32(vc.ClusterID)
+		for _, server := range vc.Servers.Internal() {
+			if server.Parent != nil && server.Parent.ID == leaf.ID {
+				serverInfo := &horus_pb.VCServerInfo{}
+				serverInfo.Id = uint32(server.ID)
+				vcInfo.Servers = append(vcInfo.Servers, serverInfo)
+			}
 		}
 		for _, spine := range vc.Spines.Internal() {
 			vcInfo.Spines = append(vcInfo.Spines, uint32(spine.ID))

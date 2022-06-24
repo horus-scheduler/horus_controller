@@ -47,6 +47,10 @@ func (s *spineSrvServer) GetTopology(context.Context, *empty.Empty) (*horus_pb.T
 	return nil, errors.New("GetTopology isn't supported by spine")
 }
 
+func (s *spineSrvServer) GetTopologyAtLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.TopoInfo, error) {
+	return nil, errors.New("GetTopologyAtLeaf isn't supported by spine")
+}
+
 func (s *spineSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	logrus.Debugf("[SpineTopoServer] Adding a leaf %d to spine %d", leafInfo.Id, leafInfo.SpineID)
 	leaf, err := s.topology.AddLeafToSpine(leafInfo)
@@ -125,6 +129,10 @@ func (s *spineSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.Se
 }
 
 func (s *spineSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
+	return &horus_pb.VCsResponse{}, nil
+}
+
+func (s *spineSrvServer) GetVCsOfLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.VCsResponse, error) {
 	return &horus_pb.VCsResponse{}, nil
 }
 

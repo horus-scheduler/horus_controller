@@ -83,7 +83,8 @@ func NewBareLeafController(ctrlID uint16, cfg *rootConfig, opts ...TopologyOptio
 	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(ctrlID), target)
 
-	rpcEndPoint := horus_net.NewBareLeafRpcEndpoint(cfg.RemoteSrvServer,
+	rpcEndPoint := horus_net.NewBareLeafRpcEndpoint(ctrlID,
+		cfg.RemoteSrvServer,
 		updatedServersRPC,
 		newServersRPC,
 		newVCsRPC)
@@ -155,13 +156,13 @@ func (c *leafController) Start() {
 	c.controller.Start()
 
 	go c.rpcEndPoint.Start()
-	logrus.Debugf("[Leaf] Fetching all VCs from %s", c.rpcEndPoint.SrvCentralAddr)
+	logrus.Debugf("[Leaf-%d] Fetching all VCs from %s", c.ID, c.rpcEndPoint.SrvCentralAddr)
 	time.Sleep(time.Second)
 	vcs, err := c.rpcEndPoint.GetVCs()
 	if len(vcs) == 0 {
-		logrus.Warnf("[Leaf] No VCs were fetched from %s", c.rpcEndPoint.SrvCentralAddr)
+		logrus.Warnf("[Leaf-%d] No VCs were fetched from %s", c.ID, c.rpcEndPoint.SrvCentralAddr)
 	} else {
-		logrus.Debugf("[Leaf] %d VCs were fetched", len(vcs))
+		logrus.Debugf("[Leaf-%d] %d VCs were fetched", c.ID, len(vcs))
 	}
 	if err != nil {
 		logrus.Error(err)
@@ -182,11 +183,11 @@ func (c *leafController) Start() {
 
 func (c *leafController) FetchTopology() error {
 	go c.rpcEndPoint.StartClient()
-	logrus.Debugf("[Leaf] Fetching the current topology from %s", c.rpcEndPoint.SrvCentralAddr)
+	logrus.Debugf("[Leaf-%d] Fetching the current topology from %s", c.ID, c.rpcEndPoint.SrvCentralAddr)
 	time.Sleep(time.Second)
 	topoInfo, err := c.rpcEndPoint.GetTopology()
 	if topoInfo == nil {
-		logrus.Errorf("[Leaf] No topology was fetched from %s", c.rpcEndPoint.SrvCentralAddr)
+		logrus.Errorf("[Leaf-%d] No topology was fetched from %s", c.ID, c.rpcEndPoint.SrvCentralAddr)
 	}
 	if err != nil {
 		logrus.Errorf(err.Error())
@@ -196,7 +197,7 @@ func (c *leafController) FetchTopology() error {
 	c.topology = topo
 	leaf, _ := c.topology.Leaves.Load(c.ID)
 	if leaf == nil {
-		logrus.Fatalf("[Leaf] Leaf %d doesn't exist in the topology", c.ID)
+		logrus.Fatalf("[Leaf-%d] Leaf %d doesn't exist in the topology", c.ID, c.ID)
 		return fmt.Errorf("leaf %d doesn't exist in the topology", c.ID)
 	}
 
@@ -211,13 +212,13 @@ func (c *leafController) FetchTopology() error {
 }
 
 func (c *leafController) FetchVCs() error {
-	logrus.Debugf("[Leaf] Fetching all VCs from %s", c.rpcEndPoint.SrvCentralAddr)
+	logrus.Debugf("[Leaf-%d] Fetching all VCs from %s", c.ID, c.rpcEndPoint.SrvCentralAddr)
 	time.Sleep(time.Second)
 	vcs, err := c.rpcEndPoint.GetVCs()
 	if len(vcs) == 0 {
-		logrus.Warnf("[Leaf] No VCs were fetched from %s", c.rpcEndPoint.SrvCentralAddr)
+		logrus.Warnf("[Leaf-%d] No VCs were fetched from %s", c.ID, c.rpcEndPoint.SrvCentralAddr)
 	} else {
-		logrus.Debugf("[Leaf] %d VCs were fetched", len(vcs))
+		logrus.Debugf("[Leaf-%d] %d VCs were fetched", c.ID, len(vcs))
 	}
 	if err != nil {
 		logrus.Error(err)

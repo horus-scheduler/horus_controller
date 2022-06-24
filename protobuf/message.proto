@@ -52,6 +52,7 @@ message ServerInfo {
 service HorusService {
     // Topology-related APIs
     rpc GetTopology(google.protobuf.Empty) returns (TopoInfo) {}
+    rpc GetTopologyAtLeaf(LeafInfo) returns (TopoInfo) {}
     rpc AddLeaf(LeafInfo) returns (HorusResponse) {}
     rpc FailLeaf(LeafInfo) returns (HorusResponse) {}
     rpc AddServer(ServerInfo) returns (HorusResponse) {}
@@ -59,6 +60,7 @@ service HorusService {
 
     // VC-related APIs
     rpc GetVCs(google.protobuf.Empty) returns (VCsResponse) {}
+    rpc GetVCsOfLeaf(LeafInfo) returns (VCsResponse) {}
     rpc AddVC(VCInfo) returns (HorusResponse) {}
     rpc RemoveVC(VCInfo) returns (HorusResponse) {}
 }

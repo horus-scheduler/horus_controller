@@ -185,6 +185,8 @@ func (e *LeafBus) processIngress() {
 
 func (e *LeafBus) initialize() {
 	logrus.Infof("[LeafBus-%d] Running initialization logic", e.ctrlID)
+	e.topology.Debug()
+	e.vcm.Debug()
 }
 
 func (e *LeafBus) Start() {

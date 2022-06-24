@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
 	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
@@ -18,6 +17,7 @@ import (
 
 type LeafRpcEndpoint struct {
 	sync.RWMutex
+	ctrlID         uint16
 	SrvCentralAddr string
 	SrvLAddr       string
 
@@ -52,16 +52,14 @@ func NewLeafRpcEndpoint(srvLAddr, srvCentralAddr string,
 	}
 }
 
-func NewBareLeafRpcEndpoint(srvCentralAddr string,
+func NewBareLeafRpcEndpoint(ctrlID uint16, srvCentralAddr string,
 	updatedServers chan *core.LeafHealthMsg,
 	newServers chan *ServerAddedMessage,
 	newVCs chan *VCUpdatedMessage,
 ) *LeafRpcEndpoint {
 	return &LeafRpcEndpoint{
-		// SrvLAddr:            srvLAddr,
-		SrvCentralAddr: srvCentralAddr,
-		// topology:            topology,
-		// vcm:                 vcm,
+		ctrlID:              ctrlID,
+		SrvCentralAddr:      srvCentralAddr,
 		updatedServersEgExt: updatedServers,
 		newServersEgExt:     newServers,
 		newVCsEgExt:         newVCs,
@@ -144,7 +142,12 @@ func (s *LeafRpcEndpoint) GetVCs() ([]*horus_pb.VCInfo, error) {
 	}
 	defer conn.Close()
 	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
-	resp, err := client.GetVCs(context.Background(), &empty.Empty{})
+	leafInfo := &horus_pb.LeafInfo{Id: uint32(s.ctrlID)}
+	resp, err := client.GetVCsOfLeaf(context.Background(), leafInfo)
+	if err != nil {
+		vcs := make([]*horus_pb.VCInfo, 0)
+		return vcs, nil
+	}
 	return resp.Vcs, err
 }
 
@@ -158,7 +161,8 @@ func (s *LeafRpcEndpoint) GetTopology() (*horus_pb.TopoInfo, error) {
 	}
 	defer conn.Close()
 	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
-	topoInfo, err := client.GetTopology(context.Background(), &empty.Empty{})
+	leafInfo := &horus_pb.LeafInfo{Id: uint32(s.ctrlID)}
+	topoInfo, err := client.GetTopologyAtLeaf(context.Background(), leafInfo)
 	return topoInfo, err
 }
 

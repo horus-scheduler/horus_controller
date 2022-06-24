@@ -33,6 +33,10 @@ func (s *managerSrvServer) GetTopology(context.Context, *empty.Empty) (*horus_pb
 	return nil, errors.New("GetTopology isn't supported by manager")
 }
 
+func (s *managerSrvServer) GetTopologyAtLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.TopoInfo, error) {
+	return nil, errors.New("GetTopologyAtLeaf isn't supported by manager")
+}
+
 func (s *managerSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
 	leafID := uint16(leafInfo.Id)
 	logrus.Debugf("[ManagerTopoServer] Add leaf %d", leafID)
@@ -56,6 +60,10 @@ func (s *managerSrvServer) FailServer(ctx context.Context, server *horus_pb.Serv
 }
 
 func (v *managerSrvServer) GetVCs(ctx context.Context, e *empty.Empty) (*horus_pb.VCsResponse, error) {
+	return &horus_pb.VCsResponse{}, nil
+}
+
+func (s *managerSrvServer) GetVCsOfLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.VCsResponse, error) {
 	return &horus_pb.VCsResponse{}, nil
 }
 
