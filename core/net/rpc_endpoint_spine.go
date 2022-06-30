@@ -300,8 +300,22 @@ func (s *SpineRpcEndpoint) broadcastAddVCToLeaves(msg *VCUpdatedMessage) error {
 	if len(leaves) == 0 {
 		return errors.New("leaves don't exist")
 	}
+	currentVCInfo := msg.VCInfo
 	for _, leaf := range leaves {
-		err := s.sendAddVCToLeaf(msg.VCInfo, msg.Type, leaf)
+		vcInfo := &horus_pb.VCInfo{
+			Id:     currentVCInfo.Id,
+			Spines: currentVCInfo.Spines,
+		}
+		for _, serverInfo := range currentVCInfo.Servers {
+			server := s.topology.GetNode(uint16(serverInfo.Id), model.NodeType_Server)
+			if server != nil && server.Parent != nil && server.Parent.ID == leaf.ID {
+				serverInfo := &horus_pb.VCServerInfo{}
+				serverInfo.Id = uint32(server.ID)
+				vcInfo.Servers = append(vcInfo.Servers, serverInfo)
+			}
+		}
+
+		err := s.sendAddVCToLeaf(vcInfo, msg.Type, leaf)
 		if err != nil {
 			return err
 		}
