@@ -260,13 +260,14 @@ func main() {
 	pool := createPool()
 	// getTopology(pool)
 
-	test_fail_three_servers_then_leaf(pool)
+	// test_fail_three_servers_then_leaf(pool)
 	// test_add_two_servers(pool)
-	// test_add_leaf_with_servers_then_fail(pool)
+	test_add_leaf_with_servers_then_fail(pool)
 
-	time.Sleep(5 * time.Second)
-	addVC(pool, 2, []uint32{0}, []uint32{3, 4, 6})
-	time.Sleep(2 * time.Second)
-	removeVC(pool, 2)
+	// time.Sleep(5 * time.Second)
+	// addVC(pool, 2, []uint32{0}, []uint32{3, 4, 6})
+	// addVC(pool, 2, []uint32{0}, []uint32{9})
+	// time.Sleep(2 * time.Second)
+	// removeVC(pool, 2)
 	// getVCs(pool)
 }
