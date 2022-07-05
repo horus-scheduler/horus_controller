@@ -3,7 +3,9 @@ package ctrl_mgr
 import (
 	"fmt"
 	"time"
-
+	"context"
+	"encoding/binary"
+	"net"
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
@@ -149,6 +151,117 @@ func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineCon
 func (c *controller) Start() {
 }
 
+unc (c *leafController) init_leaf_bfrt_setup() {
+	ctx := context.Background()
+
+	leaf_idx := c.ID // Parham: Is controller ID 0 indexed?
+	logrus.Debugf("[Leaf] Setting up tables for leaf %d", leaf_idx)
+	bfrtclient := c.bfrt
+
+	// Parham: Check the line below seems bad practice, from which object can we access topo here?
+	topology := c.topology
+	reg := "LeafIngress.linked_iq_sched"
+	/*
+		Parham: c.cfg.SpineIDs[0] bad practice but should work in our testbed. In real-world this should come from central ctrl
+		TODO: Read from topology model and get parent of this leaf(?)
+	*/
+	rentry := bfrtclient.NewRegisterEntry(reg, uint64(leaf_idx), uint64(c.cfg.SpineIDs[0]), nil)
+	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+		logrus.Fatalf("[Manager] Setting up register %s failed", reg)
+	}
+	reg = "LeafIngress.linked_sq_sched"
+	rentry = bfrtclient.NewRegisterEntry(reg, uint64(leaf_idx), uint64(c.cfg.SpineIDs[0]), nil)
+	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+		logrus.Fatalf("[Manager] Setting up register %s failed", reg)
+	}
+
+	leaf := topology.GetNode(uint16(leaf_idx), model.NodeType_Leaf)
+	worker_count := uint16(0)
+
+	// Insert idle_list values (wid of idle workers) and table entries for wid to port mapping
+	reg = "LeafIngress.idle_list"
+	table := "LeafIngress.forward_saqr_switch_dst"
+	action := "LeafIngress.act_forward_saqr"
+	for _, server := range leaf.Children {
+		// Parham: Check this line seems redundant, how can we access the worker count of server
+		worker_count += server.LastWorkerID - server.FirstWorkerID + 1
+		for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
+			index := uint16(leaf_idx)*model.MAX_VCLUSTER_WORKERS + wid
+			// TODO: Check wid logic, we assume each leaf has workers 0 indexed
+			// but for virt. implementation we assign wids: [0,n] for leaf1, [n+1-m] for leaf2 ...
+			rentry := bfrtclient.NewRegisterEntry(reg, uint64(index), uint64(index), nil)
+			if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+				logrus.Fatal(rentry)
+			}
+
+			// Table entries for worker index to port mappings
+			hw, err := net.ParseMAC(server.Address)
+			// Parham: TODO: Check endian not sure how bfrt client converted MACs originally
+			mac_data := binary.LittleEndian.Uint64(hw)
+			if err != nil {
+				logrus.Fatal(err)
+			}
+			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
+			ks := bfrtC.MakeKeys(k1) // Parham: is this needed even for single key?
+			d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
+			d2 := bfrtC.MakeBytesData("dst_mac", mac_data)
+			ds := bfrtC.MakeData(d1, d2)
+			entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+			if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+				logrus.Fatal(entry)
+			}
+		}
+	}
+
+	// Register entry #idle workers
+	reg = "LeafIngress.idle_count"
+	rentry = bfrtclient.NewRegisterEntry(reg, uint64(leaf_idx), uint64(worker_count), nil)
+	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+		logrus.Fatalf("[Manager] Setting up register %s failed", reg)
+	}
+
+	// Table entires for #available workers and #available spine schedulers
+	table = "LeafIngress.get_cluster_num_valid"
+	action = "LeafIngress.act_get_cluster_num_valid"
+	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf_idx))
+	d1 := bfrtC.MakeBytesData("num_ds_elements", uint64(worker_count))
+	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(len(c.cfg.SpineIDs)))
+	ks := bfrtC.MakeKeys(k1)
+	ds := bfrtC.MakeData(d1, d2)
+	entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+	if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+		logrus.Fatal(entry)
+	}
+
+	// Table entries for port mapping of available upstream spines
+	table = "LeafIngress.get_spine_dst_id"
+	action = "LeafIngress.act_get_spine_dst_id"
+	for spine_idx, spine_id := range c.cfg.SpineIDs {
+		k1 := bfrtC.MakeExactKey("saqr_md.random_id_1", uint64(spine_idx))
+		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf_idx))
+		ks := bfrtC.MakeKeys(k1, k2)
+		d1 := bfrtC.MakeBytesData("spine_dst_id", uint64(spine_id))
+		ds := bfrtC.MakeData(d1)
+		entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Fatal(entry)
+		}
+	}
+
+	// Table entries for qlen unit based on #workers (used for avg calc.)
+	qlen_unit, _ := model.WorkerQlenUnitMap[worker_count]
+	table = "LeafIngress.set_queue_len_unit"
+	action = "LeafIngress.act_set_queue_len_unit"
+	k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf_idx))
+	d1 = bfrtC.MakeBytesData("hdr.saqr.cluster_id", uint64(qlen_unit))
+	ks = bfrtC.MakeKeys(k1)
+	ds = bfrtC.MakeData(d1)
+	entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+	if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+		logrus.Fatal(entry)
+	}
+}
+
 func (c *leafController) Start() {
 	logrus.
 		WithFields(logrus.Fields{"ID": c.ID}).
@@ -176,7 +289,8 @@ func (c *leafController) Start() {
 			}
 		}
 	}
-
+	
+	c.init_leaf_bfrt_setup() // Init Table/register entries for each leaf
 	go c.healthMgr.Start()
 	go c.bus.Start()
 }
