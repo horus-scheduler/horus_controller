@@ -1,11 +1,12 @@
 package ctrl_mgr
 
 import (
-	"fmt"
-	"time"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"net"
+	"time"
+
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 	"github.com/khaledmdiab/horus_controller/core"
 	"github.com/khaledmdiab/horus_controller/core/model"
@@ -151,13 +152,21 @@ func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineCon
 func (c *controller) Start() {
 }
 
-unc (c *leafController) init_leaf_bfrt_setup() {
+func (c *leafController) init_leaf_bfrt_setup() {
 	ctx := context.Background()
 
 	leaf_idx := c.ID // Parham: Is controller ID 0 indexed?
 	logrus.Debugf("[Leaf] Setting up tables for leaf %d", leaf_idx)
 	bfrtclient := c.bfrt
 
+	// leaf := c.topology.GetNode(c.ID, model.NodeType_Leaf)
+	// leaf.GetIndex()
+	// var myIdx uint16 = 10000
+	// for cIdx, leaf_ := range leaf.Parent.Children {
+	// 	if leaf.ID == leaf_.ID {
+	// 		myIdx = cIdx
+	// 	}
+	// }
 	// Parham: Check the line below seems bad practice, from which object can we access topo here?
 	topology := c.topology
 	reg := "LeafIngress.linked_iq_sched"
@@ -289,7 +298,7 @@ func (c *leafController) Start() {
 			}
 		}
 	}
-	
+
 	c.init_leaf_bfrt_setup() // Init Table/register entries for each leaf
 	go c.healthMgr.Start()
 	go c.bus.Start()

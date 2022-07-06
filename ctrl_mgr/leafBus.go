@@ -3,6 +3,8 @@ package ctrl_mgr
 import (
 	"context"
 	"encoding/binary"
+	"net"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
@@ -10,7 +12,6 @@ import (
 	"github.com/khaledmdiab/horus_controller/core/model"
 	horus_net "github.com/khaledmdiab/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
-	"net"
 )
 
 // LeafBusChan ...
