@@ -2,6 +2,8 @@
 
 This repository contains our implementation of the control plane of the Horus in-network task scheduler. 
 
+XXX Explain what Horus is.
+
 Horus has both data plane and control plane components. 
 The control plane of Horus consists of a centralized controller, spine controllers, and leaf controllers. While the data plane schedules tasks, the control plane handles initialization, failures, and dynamic virtual clusters.
 
@@ -28,7 +30,7 @@ Build:
 ## Main Assumptions
 We made few assumptions while designing the control plane. Most of these assumptions are implementation-specific (i.e., not inherent to Horus). This means that we can get rid off them in the future.
 
-1. **Design-specific Assumptions**
+1. ***Design-specific Assumptions***
     - The centralized controller doesn't fail
 2. ***Implementation-specific Assumptions***
     - The spine controllers don't fail
@@ -45,8 +47,10 @@ We made few assumptions while designing the control plane. Most of these assumpt
         - It doesn't know the added/removed leaves to/from other spines
         - It doesn't know the other added/removed spines
     - Adding a new leaf controller could take ~5 seconds
+        - This is because the `manager` needs to shutdown multiple components.
 
 ## Todo
-- [ ] 
-- [ ] 
-- [ ]
+
+- [ ] XXX
+- [ ] XXX
+- [ ] XXX

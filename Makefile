@@ -1,7 +1,7 @@
 
 TARGET_CC=horus-central-ctrl
 TARGET_MGR=horus-switch-mgr
-PKG_NAME=github.com/khaledmdiab/horus_controller
+PKG_NAME=github.com/horus-scheduler/horus_controller
 EXEC_PKGS = centralized manager
 CORE_PKGS = $(sort $(dir $(wildcard core/*/)))
 FMT := $(shell go fmt)

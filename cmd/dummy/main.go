@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
+	horus_pb "github.com/horus-scheduler/horus_controller/protobuf"
 	grpcpool "github.com/processout/grpc-go-pool"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"

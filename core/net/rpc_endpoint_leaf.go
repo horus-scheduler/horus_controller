@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/khaledmdiab/horus_controller/core"
-	"github.com/khaledmdiab/horus_controller/core/model"
-	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
+	"github.com/horus-scheduler/horus_controller/core"
+	"github.com/horus-scheduler/horus_controller/core/model"
+	horus_pb "github.com/horus-scheduler/horus_controller/protobuf"
 	grpcpool "github.com/processout/grpc-go-pool"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"

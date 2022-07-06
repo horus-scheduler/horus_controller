@@ -5,7 +5,7 @@ import (
 	"net"
 	"sync"
 
-	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
+	horus_pb "github.com/horus-scheduler/horus_controller/protobuf"
 	"google.golang.org/grpc"
 )
 

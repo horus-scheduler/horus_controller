@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/khaledmdiab/horus_controller/core"
-	"github.com/khaledmdiab/horus_controller/core/model"
-	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
+	"github.com/horus-scheduler/horus_controller/core"
+	"github.com/horus-scheduler/horus_controller/core/model"
+	horus_pb "github.com/horus-scheduler/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 	context "golang.org/x/net/context"
 )

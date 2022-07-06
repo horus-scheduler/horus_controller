@@ -1,8 +1,8 @@
 package net
 
 import (
-	"github.com/khaledmdiab/horus_controller/core/model"
-	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
+	"github.com/horus-scheduler/horus_controller/core/model"
+	horus_pb "github.com/horus-scheduler/horus_controller/protobuf"
 )
 
 type VCUpdateType uint32

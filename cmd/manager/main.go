@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	ctrl_mgr "github.com/khaledmdiab/horus_controller/ctrl_mgr"
+	ctrl_mgr "github.com/horus-scheduler/horus_controller/ctrl_mgr"
 	"github.com/sirupsen/logrus"
 )
 

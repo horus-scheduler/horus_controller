@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/khaledmdiab/horus_controller/core/model"
+	"github.com/horus-scheduler/horus_controller/core/model"
 	"github.com/sirupsen/logrus"
 )
 

@@ -1,9 +1,9 @@
 package ctrl_central
 
 import (
-	"github.com/khaledmdiab/horus_controller/core"
-	"github.com/khaledmdiab/horus_controller/core/model"
-	"github.com/khaledmdiab/horus_controller/core/net"
+	"github.com/horus-scheduler/horus_controller/core"
+	"github.com/horus-scheduler/horus_controller/core/model"
+	"github.com/horus-scheduler/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
 )
 

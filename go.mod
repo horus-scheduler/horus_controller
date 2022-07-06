@@ -1,4 +1,4 @@
-module github.com/khaledmdiab/horus_controller
+module github.com/horus-scheduler/horus_controller
 
 go 1.18
 

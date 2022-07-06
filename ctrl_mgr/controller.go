@@ -7,11 +7,11 @@ import (
 	"net"
 	"time"
 
+	"github.com/horus-scheduler/horus_controller/core"
+	"github.com/horus-scheduler/horus_controller/core/model"
+	horus_net "github.com/horus-scheduler/horus_controller/core/net"
+	horus_pb "github.com/horus-scheduler/horus_controller/protobuf"
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
-	"github.com/khaledmdiab/horus_controller/core"
-	"github.com/khaledmdiab/horus_controller/core/model"
-	horus_net "github.com/khaledmdiab/horus_controller/core/net"
-	horus_pb "github.com/khaledmdiab/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 )
 

@@ -1,7 +1,7 @@
 package core
 
 import (
-	"github.com/khaledmdiab/horus_controller/core/model"
+	"github.com/horus-scheduler/horus_controller/core/model"
 )
 
 type SpineHealthManager struct {

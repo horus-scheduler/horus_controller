@@ -1,10 +1,10 @@
 package ctrl_mgr
 
 import (
+	"github.com/horus-scheduler/horus_controller/core"
+	"github.com/horus-scheduler/horus_controller/core/model"
+	horus_net "github.com/horus-scheduler/horus_controller/core/net"
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
-	"github.com/khaledmdiab/horus_controller/core"
-	"github.com/khaledmdiab/horus_controller/core/model"
-	horus_net "github.com/khaledmdiab/horus_controller/core/net"
 	"github.com/sirupsen/logrus"
 )
 
