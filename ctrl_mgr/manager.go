@@ -2,7 +2,6 @@ package ctrl_mgr
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"sync"
@@ -62,12 +61,12 @@ func NewSwitchManager(topoFp, cfgFp string, opts ...SwitchManagerOption) *switch
 	// Initialize leaf and spine controllers
 	var leaves []*leafController
 	var spines []*spineController
-	for _, ctrlID := range cfg.LeafIDs {
-		newCtrl := NewBareLeafController(ctrlID, cfg)
+	for _, leafCtrl := range cfg.Leaves {
+		newCtrl := NewBareLeafController(leafCtrl.ID, leafCtrl.PipeID, cfg)
 		leaves = append(leaves, newCtrl)
 	}
-	for _, ctrlID := range cfg.SpineIDs {
-		newCtrl := NewSpineController(ctrlID, topoFp, cfg)
+	for _, spineCtrl := range cfg.Spines {
+		newCtrl := NewSpineController(spineCtrl.ID, spineCtrl.PipeID, topoFp, cfg)
 		spines = append(spines, newCtrl)
 	}
 
@@ -102,7 +101,7 @@ func NewSwitchManager(topoFp, cfgFp string, opts ...SwitchManagerOption) *switch
 func (sc *switchManager) init_random_adjust_tables(bfrtclient *bfrtC.Client) {
 	ctx := context.Background()
 	for i := 1; i <= 5; i++ {
-		table_ds := "LeafIngress.adjust_random_range_ds"
+		table_ds := "pipe_leaf.LeafIngress.adjust_random_range_ds"
 		action := fmt.Sprintf("LeafIngress.adjust_random_worker_range_%d", i)
 		k_ds_1 := bfrtC.MakeExactKey("saqr_md.cluster_num_valid_ds", uint64(math.Pow(2, float64(i))))
 		k_ds := bfrtC.MakeKeys(k_ds_1)
@@ -110,7 +109,7 @@ func (sc *switchManager) init_random_adjust_tables(bfrtclient *bfrtC.Client) {
 		if err := bfrtclient.InsertTableEntry(ctx, entry_ds); err != nil {
 			logrus.Fatal(entry_ds)
 		}
-		table_us := "LeafIngress.adjust_random_range_us"
+		table_us := "pipe_leaf.LeafIngress.adjust_random_range_us"
 		k_us_1 := bfrtC.MakeExactKey("saqr_md.cluster_num_valid_us", uint64(math.Pow(2, float64(i))))
 		k_us := bfrtC.MakeKeys(k_us_1)
 		entry_us := bfrtclient.NewTableEntry(table_us, k_us, action, nil, nil) // Parham: works with nil data?
@@ -126,7 +125,7 @@ func (sc *switchManager) init_common_leaf_bfrt_setup(bfrtclient *bfrtC.Client) {
 	ctx := context.Background()
 
 	// Table entry for CPU port
-	table := "LeafIngress.forward_saqr_switch_dst"
+	table := "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
 	action := "LeafIngress.act_forward_saqr"
 	k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(model.CPU_PORT_ID))
 	ks := bfrtC.MakeKeys(k1)
@@ -139,7 +138,7 @@ func (sc *switchManager) init_common_leaf_bfrt_setup(bfrtclient *bfrtC.Client) {
 	}
 	// Table entry for upstream port map (spine_id->port or client_id->port)
 	for key, value := range model.UpstreamPortMap {
-		table = "LeafIngress.forward_saqr_switch_dst"
+		table = "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
 		action = "LeafIngress.act_forward_saqr"
 		k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(key))
 		ks := bfrtC.MakeKeys(k1)
@@ -155,13 +154,12 @@ func (sc *switchManager) init_common_leaf_bfrt_setup(bfrtclient *bfrtC.Client) {
 		action = "$normal"
 		k1 = bfrtC.MakeExactKey("$sid", uint64(key))
 		// TODO: Check correctness, data should be string "INGRESS", here we converted to uint64 to match the API
-		d1 = bfrtC.MakeBytesData("$direction", binary.LittleEndian.Uint64([]byte("INGRESS")))
+		dstr1 := bfrtC.MakeStrData("$direction", "INGRESS")
 		d2 = bfrtC.MakeBytesData("$ucast_egress_port", uint64(value))
-		// TODO: Check correctness, data should've been boolean type
-		d3 := bfrtC.MakeBytesData("$ucast_egress_port_valid", 1)
-		d4 := bfrtC.MakeBytesData("$session_enable", 1)
+		d3 := bfrtC.MakeBoolData("$ucast_egress_port_valid", true)
+		d4 := bfrtC.MakeBoolData("$session_enable", true)
 		ks = bfrtC.MakeKeys(k1)
-		ds = bfrtC.MakeData(d1, d2, d3, d4)
+		ds = bfrtC.MakeData(dstr1, d2, d3, d4)
 		entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
 		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
 			logrus.Fatal(entry)
@@ -203,7 +201,7 @@ func (sc *switchManager) Run() {
 			// leafCtrl := NewLeafController(leafID, sc.topoFp, sc.cfg,
 			// 	WithoutLeaves(),
 			// 	WithExtraLeaf(newLeaf.Leaf))
-			leafCtrl := NewBareLeafController(leafID, sc.cfg)
+			leafCtrl := NewBareLeafController(leafID, newLeaf.Leaf.PipeID, sc.cfg)
 			err := leafCtrl.FetchTopology()
 			if err == nil {
 				leaf := leafCtrl.topology.GetNode(leafID, model.NodeType_Leaf)

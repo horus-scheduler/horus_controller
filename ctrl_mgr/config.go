@@ -8,10 +8,20 @@ import (
 )
 
 type bfrtContext struct {
-	DeviceID    uint32
-	PipeID      uint32
+	DeviceID uint32
+	// PipeID      uint32
 	P4Name      string
 	BfrtAddress string
+}
+
+type _SpineConfig struct {
+	ID     uint16
+	PipeID uint32
+}
+
+type _LeafConfig struct {
+	ID     uint16
+	PipeID uint32
 }
 
 type rootConfig struct {
@@ -21,8 +31,8 @@ type rootConfig struct {
 	RemoteSrvServer string
 	// VCServer    string
 	MgmtAddress string
-	SpineIDs    []uint16
-	LeafIDs     []uint16
+	Spines      []_SpineConfig
+	Leaves      []_LeafConfig
 	Timeout     int64
 }
 
@@ -52,22 +62,21 @@ func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
 	cfg.AsicIntf = viper.GetString("asic.intf")
 	cfg.P4Name = viper.GetString("asic.program")
 	cfg.DeviceID = viper.GetUint32("asic.device_id")
-	cfg.PipeID = viper.GetUint32("asic.pipe_id")
+	// cfg.PipeID = viper.GetUint32("asic.pipe_id")
 	cfg.BfrtAddress = viper.GetString("bfrt.address")
 	cfg.RemoteSrvServer = viper.GetString("centralized.srvAddress")
 	cfg.Timeout = viper.GetInt64("controllers.timeout")
 	cfg.MgmtAddress = viper.GetString("controllers.mgmtAddress")
 	cfg.LogLevel = viper.GetString("log.level")
-	err = viper.UnmarshalKey("controllers.spines", &cfg.SpineIDs)
+	err = viper.UnmarshalKey("controllers.spines", &cfg.Spines)
 	if err != nil {
 		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
-	err = viper.UnmarshalKey("controllers.leaves", &cfg.LeafIDs)
+	err = viper.UnmarshalKey("controllers.leaves", &cfg.Leaves)
 	if err != nil {
 		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
-
 	return cfg
 }

@@ -67,7 +67,7 @@ func WithoutLeaves() TopologyOption {
 	}
 }
 
-func NewBareLeafController(ctrlID uint16, cfg *rootConfig, opts ...TopologyOption) *leafController {
+func NewBareLeafController(ctrlID uint16, pipeID uint32, cfg *rootConfig, opts ...TopologyOption) *leafController {
 	// create RPC endpoint (without VCM or Topology)
 	// run rpc.GetTopology()
 	// create Topology
@@ -83,7 +83,7 @@ func NewBareLeafController(ctrlID uint16, cfg *rootConfig, opts ...TopologyOptio
 	newServersRPC := make(chan *horus_net.ServerAddedMessage, horus_net.DefaultUnixSockRecvSize)
 	newVCsRPC := make(chan *horus_net.VCUpdatedMessage, horus_net.DefaultUnixSockRecvSize)
 
-	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
+	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(pipeID))
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(ctrlID), target)
 
 	rpcEndPoint := horus_net.NewBareLeafRpcEndpoint(ctrlID,
@@ -109,7 +109,7 @@ func NewBareLeafController(ctrlID uint16, cfg *rootConfig, opts ...TopologyOptio
 	}
 }
 
-func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineController {
+func NewSpineController(ctrlID uint16, pipeID uint32, topoFp string, cfg *rootConfig) *spineController {
 	topoCfg := model.ReadTopologyFile(topoFp)
 	topology := model.NewDCNFromConf(topoCfg)
 	vcm := core.NewVCManager(topology)
@@ -124,7 +124,7 @@ func NewSpineController(ctrlID uint16, topoFp string, cfg *rootConfig) *spineCon
 	newVCs := make(chan *horus_net.VCUpdatedMessage, horus_net.DefaultRpcRecvSize)
 
 	spine := topology.GetNode(ctrlID, model.NodeType_Spine)
-	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.PipeID))
+	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(pipeID))
 	bfrt := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(spine.ID), target)
 
 	rpcEndPoint := horus_net.NewSpineRpcEndpoint(spine.Address, cfg.RemoteSrvServer,
@@ -174,12 +174,12 @@ func (c *leafController) init_leaf_bfrt_setup() {
 		Parham: c.cfg.SpineIDs[0] bad practice but should work in our testbed. In real-world this should come from central ctrl
 		TODO: Read from topology model and get parent of this leaf(?)
 	*/
-	rentry := bfrtclient.NewRegisterEntry(reg, uint64(leaf_idx), uint64(c.cfg.SpineIDs[0]), nil)
+	rentry := bfrtclient.NewRegisterEntry(reg, uint64(leaf_idx), uint64(c.cfg.Spines[0].ID), nil)
 	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
 		logrus.Fatalf("[Manager] Setting up register %s failed", reg)
 	}
 	reg = "LeafIngress.linked_sq_sched"
-	rentry = bfrtclient.NewRegisterEntry(reg, uint64(leaf_idx), uint64(c.cfg.SpineIDs[0]), nil)
+	rentry = bfrtclient.NewRegisterEntry(reg, uint64(leaf_idx), uint64(c.cfg.Spines[0].ID), nil)
 	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
 		logrus.Fatalf("[Manager] Setting up register %s failed", reg)
 	}
@@ -234,7 +234,7 @@ func (c *leafController) init_leaf_bfrt_setup() {
 	action = "LeafIngress.act_get_cluster_num_valid"
 	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf_idx))
 	d1 := bfrtC.MakeBytesData("num_ds_elements", uint64(worker_count))
-	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(len(c.cfg.SpineIDs)))
+	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(len(c.cfg.Spines)))
 	ks := bfrtC.MakeKeys(k1)
 	ds := bfrtC.MakeData(d1, d2)
 	entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
@@ -245,11 +245,11 @@ func (c *leafController) init_leaf_bfrt_setup() {
 	// Table entries for port mapping of available upstream spines
 	table = "LeafIngress.get_spine_dst_id"
 	action = "LeafIngress.act_get_spine_dst_id"
-	for spine_idx, spine_id := range c.cfg.SpineIDs {
+	for spine_idx, spine := range c.cfg.Spines {
 		k1 := bfrtC.MakeExactKey("saqr_md.random_id_1", uint64(spine_idx))
 		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf_idx))
 		ks := bfrtC.MakeKeys(k1, k2)
-		d1 := bfrtC.MakeBytesData("spine_dst_id", uint64(spine_id))
+		d1 := bfrtC.MakeBytesData("spine_dst_id", uint64(spine.ID))
 		ds := bfrtC.MakeData(d1)
 		entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
 		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {

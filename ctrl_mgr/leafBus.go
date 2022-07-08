@@ -98,7 +98,7 @@ func (e *LeafBus) update_tables_server_change(leaf *model.Node, hmMsg *core.Leaf
 	}
 
 	// Update entires #available workers
-	table := "LeafIngress.get_cluster_num_valid"
+	table := "pipe_leaf.LeafIngress.get_cluster_num_valid"
 	action := "LeafIngress.act_get_cluster_num_valid"
 	// Parham: Assumed e.ctrlID is 0-indexed and indicates virtual leaf ID?
 	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(e.ctrlID))
@@ -113,7 +113,7 @@ func (e *LeafBus) update_tables_server_change(leaf *model.Node, hmMsg *core.Leaf
 	}
 
 	// Update server port mappings
-	table = "LeafIngress.forward_saqr_switch_dst"
+	table = "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
 	action = "LeafIngress.act_forward_saqr"
 	for _, server := range hmMsg.Updated {
 		for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
@@ -139,7 +139,7 @@ func (e *LeafBus) update_tables_server_change(leaf *model.Node, hmMsg *core.Leaf
 	}
 	// Update qlen unit
 	qlen_unit, _ := model.WorkerQlenUnitMap[worker_count]
-	table = "LeafIngress.set_queue_len_unit"
+	table = "pipe_leaf.LeafIngress.set_queue_len_unit"
 	action = "LeafIngress.act_set_queue_len_unit"
 	k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(e.ctrlID))
 	d1 = bfrtC.MakeBytesData("hdr.saqr.cluster_id", uint64(qlen_unit))

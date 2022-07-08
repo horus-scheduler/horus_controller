@@ -15,7 +15,7 @@
 
 [topology]
     [[topology.spines]]
-        id = 100
+        id = 0
         address = "0.0.0.0:5001"
         leaves = [0, 1, 2]
 

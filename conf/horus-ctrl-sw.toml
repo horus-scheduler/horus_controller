@@ -8,9 +8,9 @@ level = "debug"
 # only for Tofino
 [asic]
     intf = "bf_pci0"
-    program = "orca"
+    program = "saqr"
     device_id = 0
-    pipe_id = 65535
+    # pipe_id = 65535
 
 # used by spine and/or leaf switches
 [centralized]
@@ -23,6 +23,19 @@ level = "debug"
 # specifies the leaf & spine controllers managed by this specific "switch controller"
 [controllers]
     mgmtAddress = "0.0.0.0:7001"
-    spines = [0]
-    leaves = [0, 1, 2]
     timeout = 1000 # in milliseconds
+    [[controllers.spines]]
+        id = 0
+        pipeID = 0
+    [[controllers.leaves]]
+        id = 0
+        pipeID = 65535
+    [[controllers.leaves]]
+        id = 1
+        pipeID = 65535
+    [[controllers.leaves]]
+        id = 2
+        pipeID = 65535
+    # spines = [0]
+    # leaves = [0, 1, 2]
+    

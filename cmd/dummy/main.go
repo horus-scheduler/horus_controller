@@ -83,7 +83,7 @@ func failServer(pool *grpcpool.Pool, serverID uint32) {
 }
 
 func addLeaf(pool *grpcpool.Pool,
-	leafID, spineID uint32,
+	leafID, leafPipeID, spineID uint32,
 	address, mgmtAddress string,
 ) {
 	conn, err := pool.Get(context.Background())
@@ -95,6 +95,7 @@ func addLeaf(pool *grpcpool.Pool,
 	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	leafInfo := &horus_pb.LeafInfo{
 		Id:          leafID,
+		PipeID:      leafPipeID,
 		SpineID:     spineID,
 		MgmtAddress: mgmtAddress,
 		Address:     address,
@@ -238,7 +239,7 @@ func test_fail_three_servers_then_leaf(pool *grpcpool.Pool) {
 
 func test_add_two_servers(pool *grpcpool.Pool) {
 	time.Sleep(5 * time.Second)
-	addLeaf(pool, 0, 0, "0.0.0.0:6001", "0.0.0.0:7001")
+	addLeaf(pool, 0, 1, 0, "0.0.0.0:6001", "0.0.0.0:7001")
 	time.Sleep(5 * time.Second)
 	// This one should succeed
 	addServer(pool, 9, 1, 8, "", 0)
@@ -247,7 +248,7 @@ func test_add_two_servers(pool *grpcpool.Pool) {
 }
 
 func test_add_leaf_with_servers_then_fail(pool *grpcpool.Pool) {
-	addLeaf(pool, 3, 0, "0.0.0.0:6004", "0.0.0.0:7001")
+	addLeaf(pool, 3, 1, 0, "0.0.0.0:6004", "0.0.0.0:7001")
 	time.Sleep(5 * time.Second)
 	addServer(pool, 10, 1, 8, "", 3)
 	time.Sleep(time.Second)
