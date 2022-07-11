@@ -60,11 +60,8 @@ func NewBareLeafBus(ctrlID uint16, busChan *LeafBusChan,
 	return &LeafBus{
 		LeafBusChan: busChan,
 		ctrlID:      ctrlID,
-		// healthMgr:   healthMgr,
-		// topology:    topology,
-		// vcm:         vcm,
-		bfrt:     bfrt,
-		DoneChan: make(chan bool, 1),
+		bfrt:        bfrt,
+		DoneChan:    make(chan bool, 1),
 	}
 }
 
@@ -127,7 +124,7 @@ func (e *LeafBus) update_tables_server_change(leaf *model.Node, hmMsg *core.Leaf
 				logrus.Fatal(err)
 			}
 			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
-			ks := bfrtC.MakeKeys(k1) // Parham: is this needed even for single key?
+			ks := bfrtC.MakeKeys(k1)
 			d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
 			d2 := bfrtC.MakeBytesData("dst_mac", mac_data)
 			ds := bfrtC.MakeData(d1, d2)

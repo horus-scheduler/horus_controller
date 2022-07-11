@@ -68,14 +68,6 @@ func WithoutLeaves() TopologyOption {
 }
 
 func NewBareLeafController(ctrlID uint16, pipeID uint32, cfg *rootConfig, opts ...TopologyOption) *leafController {
-	// create RPC endpoint (without VCM or Topology)
-	// run rpc.GetTopology()
-	// create Topology
-	// create VCM
-	// attach topology and VCM to RPC endpoint
-	// create HM
-	// create leaf bus
-
 	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)
 	asicIngress := make(chan []byte, horus_net.DefaultUnixSockRecvSize)
 	hmEgress := make(chan *core.LeafHealthMsg, horus_net.DefaultUnixSockRecvSize)
@@ -96,10 +88,7 @@ func NewBareLeafController(ctrlID uint16, pipeID uint32, cfg *rootConfig, opts .
 	return &leafController{
 		rpcEndPoint: rpcEndPoint,
 		bus:         bus,
-		// healthMgr:   healthMgr,
 		controller: &controller{
-			// topology:    topology,
-			// vcm:         vcm,
 			ID:          ctrlID,
 			cfg:         cfg,
 			bfrt:        bfrt,
@@ -155,36 +144,46 @@ func (c *controller) Start() {
 func (c *leafController) init_leaf_bfrt_setup() {
 	ctx := context.Background()
 
-	leaf_idx := c.ID // Parham: Is controller ID 0 indexed?
-	logrus.Debugf("[Leaf] Setting up tables for leaf %d", leaf_idx)
+	// Parham: Is controller ID 0 indexed?
+	topology := c.topology
+	leaf := topology.GetNode(c.ID, model.NodeType_Leaf)
+	if leaf == nil {
+		logrus.Fatalf("[Leaf] Leaf %d doesn't exist", c.ID)
+	}
+
+	spine := leaf.Parent
+	if spine == nil {
+		logrus.Fatalf("[Leaf] Leaf %d has no parent", c.ID)
+	}
+
+	leafIdx, err := leaf.GetIndex()
+	if err != nil {
+		logrus.Fatal(err.Error())
+	}
+
+	spineIdx, err := spine.GetIndex()
+	if err != nil {
+		logrus.Fatal(err.Error())
+	}
+
+	logrus.Debugf("[Leaf] Setting up tables for leaf %d", leafIdx)
 	bfrtclient := c.bfrt
 
-	// leaf := c.topology.GetNode(c.ID, model.NodeType_Leaf)
-	// leaf.GetIndex()
-	// var myIdx uint16 = 10000
-	// for cIdx, leaf_ := range leaf.Parent.Children {
-	// 	if leaf.ID == leaf_.ID {
-	// 		myIdx = cIdx
-	// 	}
-	// }
-	// Parham: Check the line below seems bad practice, from which object can we access topo here?
-	topology := c.topology
 	reg := "LeafIngress.linked_iq_sched"
 	/*
 		Parham: c.cfg.SpineIDs[0] bad practice but should work in our testbed. In real-world this should come from central ctrl
 		TODO: Read from topology model and get parent of this leaf(?)
 	*/
-	rentry := bfrtclient.NewRegisterEntry(reg, uint64(leaf_idx), uint64(c.cfg.Spines[0].ID), nil)
+	rentry := bfrtclient.NewRegisterEntry(reg, uint64(leafIdx), spineIdx, nil)
 	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
 		logrus.Fatalf("[Manager] Setting up register %s failed", reg)
 	}
 	reg = "LeafIngress.linked_sq_sched"
-	rentry = bfrtclient.NewRegisterEntry(reg, uint64(leaf_idx), uint64(c.cfg.Spines[0].ID), nil)
+	rentry = bfrtclient.NewRegisterEntry(reg, uint64(leafIdx), spineIdx, nil)
 	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
 		logrus.Fatalf("[Manager] Setting up register %s failed", reg)
 	}
 
-	leaf := topology.GetNode(uint16(leaf_idx), model.NodeType_Leaf)
 	worker_count := uint16(0)
 
 	// Insert idle_list values (wid of idle workers) and table entries for wid to port mapping
@@ -195,7 +194,7 @@ func (c *leafController) init_leaf_bfrt_setup() {
 		// Parham: Check this line seems redundant, how can we access the worker count of server
 		worker_count += server.LastWorkerID - server.FirstWorkerID + 1
 		for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
-			index := uint16(leaf_idx)*model.MAX_VCLUSTER_WORKERS + wid
+			index := uint16(leafIdx)*model.MAX_VCLUSTER_WORKERS + wid
 			// TODO: Check wid logic, we assume each leaf has workers 0 indexed
 			// but for virt. implementation we assign wids: [0,n] for leaf1, [n+1-m] for leaf2 ...
 			rentry := bfrtclient.NewRegisterEntry(reg, uint64(index), uint64(index), nil)
@@ -224,15 +223,16 @@ func (c *leafController) init_leaf_bfrt_setup() {
 
 	// Register entry #idle workers
 	reg = "LeafIngress.idle_count"
-	rentry = bfrtclient.NewRegisterEntry(reg, uint64(leaf_idx), uint64(worker_count), nil)
+	rentry = bfrtclient.NewRegisterEntry(reg, leafIdx, uint64(worker_count), nil)
 	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
 		logrus.Fatalf("[Manager] Setting up register %s failed", reg)
 	}
 
 	// Table entires for #available workers and #available spine schedulers
+	// Khaled: This should be per VC?
 	table = "LeafIngress.get_cluster_num_valid"
 	action = "LeafIngress.act_get_cluster_num_valid"
-	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf_idx))
+	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", leafIdx)
 	d1 := bfrtC.MakeBytesData("num_ds_elements", uint64(worker_count))
 	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(len(c.cfg.Spines)))
 	ks := bfrtC.MakeKeys(k1)
@@ -247,7 +247,7 @@ func (c *leafController) init_leaf_bfrt_setup() {
 	action = "LeafIngress.act_get_spine_dst_id"
 	for spine_idx, spine := range c.cfg.Spines {
 		k1 := bfrtC.MakeExactKey("saqr_md.random_id_1", uint64(spine_idx))
-		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf_idx))
+		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", leafIdx)
 		ks := bfrtC.MakeKeys(k1, k2)
 		d1 := bfrtC.MakeBytesData("spine_dst_id", uint64(spine.ID))
 		ds := bfrtC.MakeData(d1)
@@ -258,10 +258,10 @@ func (c *leafController) init_leaf_bfrt_setup() {
 	}
 
 	// Table entries for qlen unit based on #workers (used for avg calc.)
-	qlen_unit, _ := model.WorkerQlenUnitMap[worker_count]
+	qlen_unit := model.WorkerQlenUnitMap[worker_count]
 	table = "LeafIngress.set_queue_len_unit"
 	action = "LeafIngress.act_set_queue_len_unit"
-	k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf_idx))
+	k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", leafIdx)
 	d1 = bfrtC.MakeBytesData("hdr.saqr.cluster_id", uint64(qlen_unit))
 	ks = bfrtC.MakeKeys(k1)
 	ds = bfrtC.MakeData(d1)
@@ -299,7 +299,8 @@ func (c *leafController) Start() {
 		}
 	}
 
-	c.init_leaf_bfrt_setup() // Init Table/register entries for each leaf
+	// Init Table/register entries for each leaf
+	c.init_leaf_bfrt_setup()
 	go c.healthMgr.Start()
 	go c.bus.Start()
 }
