@@ -50,7 +50,18 @@ func (s *leafSrvServer) AddLeaf(ctx context.Context, leaf *horus_pb.LeafInfo) (*
 }
 
 func (s *leafSrvServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.LeafInfo) (*horus_pb.HorusResponse, error) {
-	return &horus_pb.HorusResponse{Status: "NOT_SUPPORTED"}, nil
+	logrus.Debugf("[LeafTopoServer] A leaf has failed. Leaf %d needs to change its index", leafInfo.Id)
+	leaf := s.topology.GetNode(uint16(leafInfo.Id), model.NodeType_Leaf)
+	if leaf == nil {
+		return nil, errors.New("leaf doesn't exist")
+	}
+	leaf.Lock()
+	oldIndex := leaf.Index
+	leaf.Index = uint16(leafInfo.Index)
+	logrus.Debugf("[LeafTopoServer] Leaf old index = %d, new index = %d", oldIndex, leaf.Index)
+	leaf.Unlock()
+	s.topology.Debug()
+	return &horus_pb.HorusResponse{Status: "OK"}, nil
 }
 
 func (s *leafSrvServer) AddServer(ctx context.Context, serverInfo *horus_pb.ServerInfo) (*horus_pb.HorusResponse, error) {

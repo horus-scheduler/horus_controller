@@ -36,11 +36,12 @@ message SpineInfo {
 
 message LeafInfo {
     uint32 id = 1;
-    string address = 2;
-    repeated ServerInfo servers = 3;
-    uint32 spineID = 4;
-    string mgmtAddress = 5;
-    uint32 pipeID = 6;
+    uint32 index = 2;
+    string address = 3;
+    repeated ServerInfo servers = 4;
+    uint32 spineID = 5;
+    string mgmtAddress = 6;
+    uint32 pipeID = 7;
 }
 
 message ServerInfo {

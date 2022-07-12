@@ -41,6 +41,7 @@ func NewDCNFromConf(topoCfg *topoRootConfig) *Topology {
 			var workerID uint16 = 0
 			leafConf := topoCfg.Leaves[leafID]
 			leaf := NewNode(leafConf.Address, leafConf.MgmtAddress, leafConf.ID, 0, NodeType_Leaf)
+			leaf.Index = leafConf.Index
 			leaf.Parent = spine
 			spine.Children = append(spine.Children, leaf)
 			leaf.FirstWorkerID = workerID
@@ -89,6 +90,7 @@ func NewDCNFromTopoInfo(topoInfo *horus_pb.TopoInfo) *Topology {
 			// workerIDs are local per leaf
 			var workerID uint16 = 0
 			leaf := NewNode(leafInfo.Address, leafInfo.MgmtAddress, uint16(leafInfo.Id), 0, NodeType_Leaf)
+			leaf.Index = uint16(leafInfo.Index)
 			leaf.Parent = spine
 			spine.Children = append(spine.Children, leaf)
 			leaf.FirstWorkerID = workerID
@@ -127,6 +129,7 @@ func (s *Topology) EncodeToTopoInfo() *horus_pb.TopoInfo {
 			leafInfo := &horus_pb.LeafInfo{}
 			leaf.RLock()
 			leafInfo.Id = uint32(leaf.ID)
+			leafInfo.Index = uint32(leaf.Index)
 			leafInfo.Address = leaf.Address
 			leafInfo.MgmtAddress = leaf.MgmtAddress
 			leafInfo.SpineID = uint32(spine.ID)
@@ -174,6 +177,7 @@ func (s *Topology) EncodeToTopoInfoAtLeaf(leafInfo *horus_pb.LeafInfo) *horus_pb
 
 	leaf.RLock()
 	retLeafInfo.Id = uint32(leaf.ID)
+	retLeafInfo.Index = uint32(leaf.Index)
 	retLeafInfo.Address = leaf.Address
 	retLeafInfo.MgmtAddress = leaf.MgmtAddress
 	for _, server := range leaf.Children {
@@ -274,6 +278,7 @@ func (s *Topology) AddLeafToSpine(leafInfo *horus_pb.LeafInfo) (*Node, error) {
 	leaf.Parent = spine
 	spine.Lock()
 	spine.Children = append(spine.Children, leaf)
+	leaf.Index = uint16(len(spine.Children) - 1)
 	spine.Unlock()
 	leaf.FirstWorkerID = 0
 	leaf.LastWorkerID = 0
@@ -361,13 +366,14 @@ func (s *Topology) RemoveServer(serverID uint16) (bool, []*Node) {
 	return true, updatedServers
 }
 
-// Return the local index of the removed leaf within the spine
+// Return the local index of the removed leaf within the spine and the leaves to be updated
 // Input: Global leafID
-func (s *Topology) RemoveLeaf(leafID uint16) int {
+func (s *Topology) RemoveLeaf(leafID uint16) (int, []*Node) {
+	var updated []*Node
 	leaf := s.GetNode(leafID, NodeType_Leaf)
 
 	if leaf == nil {
-		return -1
+		return -1, updated
 	}
 	logrus.Debug("Removing leaf: ", leaf.ID)
 	// Remove children *before* the lock
@@ -382,16 +388,22 @@ func (s *Topology) RemoveLeaf(leafID uint16) int {
 
 	spine := leaf.Parent
 	var removedIdx int = 0
+	include := false
 	for lIdx, l := range spine.Children {
 		if l.ID == leafID {
 			removedIdx = lIdx
-			break
+			include = true
+		} else {
+			if include {
+				l.Index -= 1
+				updated = append(updated, l)
+			}
 		}
 	}
 	spine.Children = append(spine.Children[:removedIdx], spine.Children[removedIdx+1:]...)
 	s.Leaves.Delete(leafID)
 
-	return removedIdx
+	return removedIdx, updated
 }
 
 func (s *Topology) Debug() {
@@ -412,7 +424,10 @@ func (s *Topology) Debug() {
 		if node.Type == NodeType_Spine {
 			logrus.Debug("- Spine: ", node.ID)
 		} else if node.Type == NodeType_Leaf {
-			logrus.Debug("-- Leaf: ", node.ID, ", First WID: ", node.FirstWorkerID, ", Last WID: ", node.LastWorkerID)
+			logrus.Debug("-- Leaf: ", node.ID,
+				", Index: ", node.Index,
+				", First WID: ", node.FirstWorkerID,
+				", Last WID: ", node.LastWorkerID)
 		} else if node.Type == NodeType_Server {
 			logrus.Debug("--- Server: ", node.ID, ", First WID: ", node.FirstWorkerID, ", Last WID: ", node.LastWorkerID)
 		}

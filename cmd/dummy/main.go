@@ -45,8 +45,8 @@ func getTopology(pool *grpcpool.Pool) {
 				lines = append(lines, serverLine)
 			}
 
-			logrus.Infof("-- Leaf: %d, First WID: %d, Last WID: %d",
-				leafInfo.Id, leafFirstWorkerID, leafLastWorkerID)
+			logrus.Infof("-- Leaf: %d, Index: %d, First WID: %d, Last WID: %d",
+				leafInfo.Id, leafInfo.Index, leafFirstWorkerID, leafLastWorkerID)
 			for _, line := range lines {
 				logrus.Info(line)
 			}
@@ -242,28 +242,38 @@ func test_add_two_servers(pool *grpcpool.Pool) {
 	addLeaf(pool, 0, 1, 0, "0.0.0.0:6001", "0.0.0.0:7001")
 	time.Sleep(5 * time.Second)
 	// This one should succeed
-	addServer(pool, 9, 1, 8, "", 0)
+	addServer(pool, 9, 1, 8, "99:99:99:99:99:99", 0)
 	// This one should fail
-	addServer(pool, 10, 1, 8, "", 5)
+	addServer(pool, 10, 1, 8, "aa:aa:aa:aa:aa:aa", 5)
 }
 
 func test_add_leaf_with_servers_then_fail(pool *grpcpool.Pool) {
 	addLeaf(pool, 3, 1, 0, "0.0.0.0:6004", "0.0.0.0:7001")
 	time.Sleep(5 * time.Second)
-	addServer(pool, 10, 1, 8, "", 3)
+	addServer(pool, 10, 1, 8, "aa:aa:aa:aa:aa:aa", 3)
 	time.Sleep(time.Second)
-	addServer(pool, 11, 1, 8, "", 3)
+	addServer(pool, 11, 1, 8, "bb:bb:bb:bb:bb:bb", 3)
 	time.Sleep(time.Second)
 	failLeaf(pool, 3)
 }
 
+func test_leaf_index(pool *grpcpool.Pool) {
+	failLeaf(pool, 1)
+	time.Sleep(5 * time.Second)
+	addLeaf(pool, 3, 1, 0, "0.0.0.0:6004", "0.0.0.0:7001")
+	time.Sleep(5 * time.Second)
+	addServer(pool, 10, 1, 8, "aa:aa:aa:aa:aa:aa", 3)
+	time.Sleep(time.Second)
+	addServer(pool, 11, 1, 8, "bb:bb:bb:bb:bb:bb", 3)
+}
+
 func main() {
 	pool := createPool()
-	// getTopology(pool)
-
+	getTopology(pool)
+	// test_leaf_index(pool)
 	// test_fail_three_servers_then_leaf(pool)
 	// test_add_two_servers(pool)
-	test_add_leaf_with_servers_then_fail(pool)
+	// test_add_leaf_with_servers_then_fail(pool)
 
 	// time.Sleep(5 * time.Second)
 	// addVC(pool, 2, []uint32{0}, []uint32{3, 4, 6})

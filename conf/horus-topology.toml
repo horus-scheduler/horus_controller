@@ -20,19 +20,22 @@
         leaves = [0, 1, 2]
 
     [[topology.leaves]]
-        id = 0 
+        id = 0
+        index = 0
         address = "0.0.0.0:6001"
         mgmtAddress = "0.0.0.0:7001"
         servers = [0, 1, 2] # order matters
 
     [[topology.leaves]]
         id = 1
+        index = 1
         address = "0.0.0.0:6002"
         mgmtAddress = "0.0.0.0:7001"
         servers = [3, 4, 5] # order matters
 
     [[topology.leaves]]
         id = 2
+        index = 2
         address = "0.0.0.0:6003"
         mgmtAddress = "0.0.0.0:7001"
         servers = [6, 7, 8] # order matters
@@ -40,53 +43,53 @@
     [[topology.servers]]
         id = 0
         port_id = 1
-        address = ""
+        address = "00:00:00:00:00:00"
         workers_count = 8
 
     [[topology.servers]]
         id = 1
         port_id = 1
-        address = ""
+        address = "11:11:11:11:11:11"
         workers_count = 8
 
     [[topology.servers]]
         id = 2
         port_id = 1
-        address = ""
+        address = "22:22:22:22:22:22"
         workers_count = 8
 
     [[topology.servers]]
         id = 3
         port_id = 1
-        address = ""
+        address = "33:33:33:33:33:33"
         workers_count = 8
 
     [[topology.servers]]
         id = 4
         port_id = 1
-        address = ""
+        address = "44:44:44:44:44:44"
         workers_count = 8
 
     [[topology.servers]]
         id = 5
         port_id = 1
-        address = ""
+        address = "55:55:55:55:55:55"
         workers_count = 8
 
     [[topology.servers]]
         id = 6
         port_id = 1
-        address = ""
+        address = "66:66:66:66:66:66"
         workers_count = 8
 
     [[topology.servers]]
         id = 7
         port_id = 1
-        address = ""
+        address = "77:77:77:77:77:77"
         workers_count = 8
 
     [[topology.servers]]
         id = 8
         port_id = 1
-        address = "X"
+        address = "88:88:88:88:88:88"
         workers_count = 8

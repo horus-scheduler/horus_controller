@@ -28,6 +28,7 @@ type spineConfig struct {
 
 type leafConfig struct {
 	ID          uint16
+	Index       uint16
 	Address     string
 	MgmtAddress string   `mapstructure:"mgmtAddress"`
 	ServerIDs   []uint16 `mapstructure:"servers"`

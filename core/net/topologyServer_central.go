@@ -111,7 +111,7 @@ func (s *centralSrvServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.Leaf
 
 	// 4. Detach and remove the leaf
 	detached := s.vcm.DetachLeaf(leafID)
-	leafIdx := s.topology.RemoveLeaf(leafID)
+	leafIdx, _ := s.topology.RemoveLeaf(leafID)
 	if leaf != nil && leafIdx >= 0 && detached {
 		s.failedLeaves <- NewLeafFailedMessage(leafInfo, spines)
 		return &horus_pb.HorusResponse{Status: "OK"}, nil

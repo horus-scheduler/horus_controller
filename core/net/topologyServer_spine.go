@@ -16,6 +16,7 @@ type spineSrvServer struct {
 	horus_pb.UnimplementedHorusServiceServer
 
 	failedLeavesToRPC  chan *LeafFailedMessage
+	updatedLeavesToRPC chan *LeafUpdatedMessage
 	failedServersToRPC chan *ServerFailedMessage
 	newLeavesToRPC     chan *LeafAddedMessage
 	newServers         chan *ServerAddedMessage
@@ -27,6 +28,7 @@ type spineSrvServer struct {
 func NewSpineSrvServer(topology *model.Topology,
 	vcm *core.VCManager,
 	failedLeavesToRPC chan *LeafFailedMessage,
+	updatedLeavesToRPC chan *LeafUpdatedMessage,
 	failedServersToRPC chan *ServerFailedMessage,
 	newLeavesToRPC chan *LeafAddedMessage,
 	newServers chan *ServerAddedMessage,
@@ -36,6 +38,7 @@ func NewSpineSrvServer(topology *model.Topology,
 		topology:           topology,
 		vcm:                vcm,
 		failedLeavesToRPC:  failedLeavesToRPC,
+		updatedLeavesToRPC: updatedLeavesToRPC,
 		failedServersToRPC: failedServersToRPC,
 		newLeavesToRPC:     newLeavesToRPC,
 		newServers:         newServers,
@@ -76,10 +79,17 @@ func (s *spineSrvServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.LeafIn
 	}
 	logrus.Debugf("[SpineTopoServer] Failing a leaf %d at Spine", leafID)
 	detached := s.vcm.DetachLeaf(leafID)
-	leafIdx := s.topology.RemoveLeaf(leafID)
+	leafIdx, updatedLeaves := s.topology.RemoveLeaf(leafID)
 	logrus.Debugf("[SpineTopoServer] Leaf %d detached? %t, removed? %t", leafID, detached, leafIdx >= 0)
 	if leafIdx >= 0 && detached {
+		// updatedLeaves
 		logrus.Debugf("[SpineTopoServer] Leaf %d is removed", leafInfo.Id)
+		for _, ul := range updatedLeaves {
+			logrus.Debugf("[SpineTopoServer] Updated leaf: ID = %d and index=%d", ul.ID, ul.Index)
+		}
+		if len(updatedLeaves) > 0 {
+			s.updatedLeavesToRPC <- NewLeafUpdatedMessage(updatedLeaves)
+		}
 		s.failedLeavesToRPC <- NewLeafFailedMessage(leafInfo, []*model.Node{leaf})
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}

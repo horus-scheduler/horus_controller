@@ -12,6 +12,10 @@ const (
 	VCUpdateRem
 )
 
+type LeafUpdatedMessage struct {
+	Leaves []*model.Node
+}
+
 type LeafFailedMessage struct {
 	Leaf *horus_pb.LeafInfo
 	Dsts []*model.Node
@@ -36,6 +40,10 @@ type VCUpdatedMessage struct {
 	VCInfo *horus_pb.VCInfo
 	Dsts   []*model.Node
 	Type   VCUpdateType
+}
+
+func NewLeafUpdatedMessage(leaves []*model.Node) *LeafUpdatedMessage {
+	return &LeafUpdatedMessage{Leaves: leaves}
 }
 
 func NewLeafFailedMessage(leaf *horus_pb.LeafInfo, dsts []*model.Node) *LeafFailedMessage {

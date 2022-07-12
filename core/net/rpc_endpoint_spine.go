@@ -26,8 +26,9 @@ type SpineRpcEndpoint struct {
 	topology *model.Topology
 	vcm      *core.VCManager
 
-	failedLeavesEgExt chan *LeafFailedMessage
-	failedLeavesEgInt chan *LeafFailedMessage
+	failedLeavesEgExt  chan *LeafFailedMessage
+	failedLeavesEgInt  chan *LeafFailedMessage
+	updatedLeavesEgInt chan *LeafUpdatedMessage
 
 	failedServersEgExt chan *ServerFailedMessage
 	failedServersEgInt chan *ServerFailedMessage
@@ -63,6 +64,7 @@ func NewSpineRpcEndpoint(srvLAddr, srvCentralAddr string,
 		vcm:                vcm,
 		failedLeavesEgExt:  failedLeaves,
 		failedLeavesEgInt:  make(chan *LeafFailedMessage, DefaultRpcRecvSize),
+		updatedLeavesEgInt: make(chan *LeafUpdatedMessage, DefaultRpcRecvSize),
 		failedServersEgExt: failedServers,
 		failedServersEgInt: make(chan *ServerFailedMessage, DefaultRpcRecvSize),
 		newLeavesEgExt:     newLeaves,
@@ -86,6 +88,7 @@ func (s *SpineRpcEndpoint) createServiceListener() error {
 	rpcServer := grpc.NewServer()
 	topoServer := NewSpineSrvServer(s.topology, s.vcm,
 		s.failedLeavesEgInt,
+		s.updatedLeavesEgInt,
 		s.failedServersEgInt,
 		s.newLeavesEgInt,
 		s.newServersEgInt,
@@ -174,6 +177,35 @@ func (s *SpineRpcEndpoint) GetVCs() ([]*horus_pb.VCInfo, error) {
 	return resp.Vcs, err
 }
 
+// To a leaf
+func (s *SpineRpcEndpoint) sendLeafUpdate(updated *model.Node) error {
+	if updated != nil {
+		addr := updated.Address
+		logrus.Debugf("[SpineRPC] Leaf Address: %s", addr)
+		if connPool, found := s.leafConnPool[addr]; !found {
+			return errors.New("connection pool isn't found")
+		} else {
+			conn, err := connPool.Get(context.Background())
+			if err != nil {
+				logrus.Error(err)
+				return err
+			}
+			defer conn.Close()
+			client := horus_pb.NewHorusServiceClient(conn.ClientConn)
+			leafInfo := &horus_pb.LeafInfo{
+				Id:    uint32(updated.ID),
+				Index: uint32(updated.Index),
+			}
+			logrus.Debug("[SpineRPC] Sending updated leaf to leaf")
+			_, err = client.FailLeaf(context.Background(), leafInfo)
+			logrus.Debug("[SpineRPC] Returned from sending updated leaf to leaf")
+			return err
+		}
+	}
+	return errors.New("updated leaf doesn't exist")
+}
+
+// To the manager
 func (s *SpineRpcEndpoint) sendLeafFailed(failed *LeafFailedMessage) error {
 	if failed != nil && failed.Dsts != nil {
 		addr := failed.Dsts[0].MgmtAddress
@@ -326,6 +358,14 @@ func (s *SpineRpcEndpoint) broadcastAddVCToLeaves(msg *VCUpdatedMessage) error {
 func (s *SpineRpcEndpoint) processEvents() {
 	for {
 		select {
+		case updatedLeaf := <-s.updatedLeavesEgInt:
+			logrus.Debug("[SpineRPC] Updating leaves...")
+			for _, ul := range updatedLeaf.Leaves {
+				err := s.sendLeafUpdate(ul)
+				if err != nil {
+					logrus.Warn(err)
+				}
+			}
 		case failed := <-s.failedLeavesEgInt:
 			logrus.Debug("[SpineRPC] Fail leaf...")
 			logrus.Debug("[SpineRPC] Calling sendLeafFailed: ", failed.Leaf.Id)

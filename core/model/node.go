@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -27,26 +26,11 @@ type Node struct {
 
 	FirstWorkerID uint16 // valid if Type == leaf | server
 	LastWorkerID  uint16 // valid if Type == leaf | server
+	Index         uint16 // valid if Type == leaf
 
 	LastPingTime time.Time
 	Healthy      bool
 	Ready        bool
-}
-
-func (n *Node) GetIndex() (uint64, error) {
-	if n.Parent == nil {
-		return 0, fmt.Errorf("node %d has no parent", n.ID)
-	}
-	var nodeIdx uint64
-	for cIdx, node := range n.Parent.Children {
-		if n.ID == node.ID {
-			nodeIdx = uint64(cIdx)
-			return uint64(nodeIdx), nil
-		}
-	}
-
-	// This would happen if there is a bug in how the parent node tracks its children
-	return 0, fmt.Errorf("node %d has no parent (possible bug)", n.ID)
 }
 
 func NewNode(address, mgmtAddress string, id, portId uint16, nodeType NodeType) *Node {
