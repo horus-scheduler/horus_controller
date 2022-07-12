@@ -263,7 +263,7 @@ func (c *leafController) init_leaf_bfrt_setup() {
 	table = "pipe_leaf.LeafIngress.set_queue_len_unit"
 	action = "LeafIngress.act_set_queue_len_unit"
 	k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leafIdx))
-	d1 = bfrtC.MakeBytesData("hdr.saqr.cluster_id", uint64(qlen_unit))
+	d1 = bfrtC.MakeBytesData("cluster_unit", uint64(qlen_unit))
 	ks = bfrtC.MakeKeys(k1)
 	ds = bfrtC.MakeData(d1)
 	entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)

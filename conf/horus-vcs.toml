@@ -5,15 +5,15 @@
             id = 0
             workersIDs = [0, 2, 3]
         [[vc.servers]]
-            id = 4
-            workersIDs = [8, 9, 10]
+            id = 1
+            workersIDs = [2, 3, 4]
 
 [[vc]]
     id = 1
     spines = [0]
         [[vc.servers]]
             id = 1
-            workersIDs = [8, 11]
+            workersIDs = [0, 1]
         [[vc.servers]]
             id = 2
-            workersIDs = [22, 23]
+            workersIDs = [0, 4]
