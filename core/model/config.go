@@ -26,10 +26,12 @@ type spineConfig struct {
 	LeafIDs []uint16 `mapstructure:"leaves"`
 }
 
+// Parham: Please check, added PortID
 type leafConfig struct {
 	ID          uint16
 	Index       uint16
 	Address     string
+	PortID      uint16   `mapstructure:"port_id"`
 	MgmtAddress string   `mapstructure:"mgmtAddress"`
 	ServerIDs   []uint16 `mapstructure:"servers"`
 }

@@ -35,13 +35,15 @@ message SpineInfo {
 }
 
 message LeafInfo {
+    // Parham: Please check correctness: added port_id 
     uint32 id = 1;
     uint32 index = 2;
     string address = 3;
-    repeated ServerInfo servers = 4;
-    uint32 spineID = 5;
-    string mgmtAddress = 6;
-    uint32 pipeID = 7;
+    uint32 port_id = 4;
+    repeated ServerInfo servers = 5;
+    uint32 spineID = 6;
+    string mgmtAddress = 7;
+    uint32 pipeID = 8;
 }
 
 message ServerInfo {

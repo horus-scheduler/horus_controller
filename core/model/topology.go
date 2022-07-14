@@ -40,7 +40,8 @@ func NewDCNFromConf(topoCfg *topoRootConfig) *Topology {
 			// workerIDs are local per leaf
 			var workerID uint16 = 0
 			leafConf := topoCfg.Leaves[leafID]
-			leaf := NewNode(leafConf.Address, leafConf.MgmtAddress, leafConf.ID, 0, NodeType_Leaf)
+			// Parham modified the line below pass PortID for leaf
+			leaf := NewNode(leafConf.Address, leafConf.MgmtAddress, leafConf.ID, leafConf.PortID, NodeType_Leaf)
 			leaf.Index = leafConf.Index
 			leaf.Parent = spine
 			spine.Children = append(spine.Children, leaf)
@@ -89,7 +90,8 @@ func NewDCNFromTopoInfo(topoInfo *horus_pb.TopoInfo) *Topology {
 		for _, leafInfo := range spineInfo.Leaves {
 			// workerIDs are local per leaf
 			var workerID uint16 = 0
-			leaf := NewNode(leafInfo.Address, leafInfo.MgmtAddress, uint16(leafInfo.Id), 0, NodeType_Leaf)
+			// Parham: Modified the line below, passing PortId
+			leaf := NewNode(leafInfo.Address, leafInfo.MgmtAddress, uint16(leafInfo.Id), uint16(leafInfo.PortId), NodeType_Leaf)
 			leaf.Index = uint16(leafInfo.Index)
 			leaf.Parent = spine
 			spine.Children = append(spine.Children, leaf)
@@ -131,6 +133,7 @@ func (s *Topology) EncodeToTopoInfo() *horus_pb.TopoInfo {
 			leafInfo.Id = uint32(leaf.ID)
 			leafInfo.Index = uint32(leaf.Index)
 			leafInfo.Address = leaf.Address
+			leafInfo.PortId = uint32(leaf.PortId) // Parham: Added this line, please check correctness
 			leafInfo.MgmtAddress = leaf.MgmtAddress
 			leafInfo.SpineID = uint32(spine.ID)
 			for _, server := range leaf.Children {
@@ -179,6 +182,7 @@ func (s *Topology) EncodeToTopoInfoAtLeaf(leafInfo *horus_pb.LeafInfo) *horus_pb
 	retLeafInfo.Id = uint32(leaf.ID)
 	retLeafInfo.Index = uint32(leaf.Index)
 	retLeafInfo.Address = leaf.Address
+	retLeafInfo.PortId = uint32(leaf.PortId) // Parham: added this line, please check
 	retLeafInfo.MgmtAddress = leaf.MgmtAddress
 	for _, server := range leaf.Children {
 		serverInfo := &horus_pb.ServerInfo{}
@@ -274,7 +278,8 @@ func (s *Topology) AddLeafToSpine(leafInfo *horus_pb.LeafInfo) (*Node, error) {
 	}
 
 	// All checks passed.
-	leaf = NewNode(leafInfo.Address, leafInfo.MgmtAddress, leafID, 0, NodeType_Leaf)
+	// Parham: modified the line below, passing PortId from protofbuf to Node.
+	leaf = NewNode(leafInfo.Address, leafInfo.MgmtAddress, leafID, uint16(leafInfo.PortId), NodeType_Leaf)
 	leaf.Parent = spine
 	spine.Lock()
 	spine.Children = append(spine.Children, leaf)

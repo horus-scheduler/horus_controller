@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"net"
 	"time"
 
@@ -383,6 +384,145 @@ func (c *leafController) Shutdown() {
 	close(c.bus.hmMsg)
 }
 
+func (c *spineController) init_random_adjust_tables() {
+	ctx := context.Background()
+	bfrtclient := c.bfrt
+	for i := 1; i <= 5; i++ {
+		table_ds := "pipe_spine.SpineIngress.adjust_random_range_sq_leafs"
+		action := fmt.Sprintf("SpineIngress.adjust_random_leaf_index_%d", i)
+		k_ds_1 := bfrtC.MakeExactKey("saqr_md.cluster_num_valid_queue_signals", uint64(math.Pow(2, float64(i))))
+		k_ds := bfrtC.MakeKeys(k_ds_1)
+		entry_ds := bfrtclient.NewTableEntry(table_ds, k_ds, action, nil, nil) // Parham: works with nil data?
+		if err := bfrtclient.InsertTableEntry(ctx, entry_ds); err != nil {
+			logrus.Fatal(entry_ds)
+		}
+	}
+}
+
+func (c *spineController) init_spine_bfrt_setup() {
+	ctx := context.Background()
+	bfrtclient := c.bfrt
+	// Parham: Is controller ID 0 indexed?
+	topology := c.topology
+	spine := topology.GetNode(c.ID, model.NodeType_Spine)
+	if spine == nil {
+		logrus.Fatalf("[Spine] Spine %d doesn't exist", c.ID)
+	}
+	// Parham: assuming single VC for now TODO: check and fix later
+	var vcID uint64 = 0
+
+	for i, leaf := range spine.Children {
+		//leafIdx := leaf.Index
+		worker_count := uint16(0)
+		for _, server := range leaf.Children {
+			// Parham: Check this line seems redundant, how can we access the worker count of server
+			worker_count += server.LastWorkerID - server.FirstWorkerID + 1
+		}
+
+		// Initialize idle list and add all children (leaves)
+		reg := "pipe_spine.SpineIngress.idle_list"
+		rentry := bfrtclient.NewRegisterEntry(reg, uint64(i), uint64(leaf.ID), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[Spine] Setting up register %s failed", reg)
+		}
+
+		// mapping[leafID] -> index of leaf in idle_list.
+		reg = "pipe_spine.SpineIngress.idle_list_idx_mapping"
+		rentry = bfrtclient.NewRegisterEntry(reg, uint64(leaf.ID), uint64(i), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[Spine] Setting up register %s failed", reg)
+		}
+
+		// Leaf port mapping
+		table := "pipe_spine.SpineIngress.forward_saqr_switch_dst"
+		// Parham: action doesn't need to start with pipe name? E.g, pipe_spine.Spineingress....
+		action := "SpineIngress.act_forward_saqr"
+		k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(leaf.ID))
+		d1 := bfrtC.MakeBytesData("port", uint64(leaf.PortId))
+		ks := bfrtC.MakeKeys(k1)
+		ds := bfrtC.MakeData(d1)
+		entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Errorf("[Spine] Setting up table %s failed", table)
+			logrus.Fatal(entry)
+		}
+
+		// LeafId -> qlen_unit mapping (two tables since we have two samples)
+		table = "pipe_spine.SpineIngress.set_queue_len_unit_1"
+		action = "SpineIngress.act_set_queue_len_unit_1"
+		k1 = bfrtC.MakeExactKey("saqr_md.random_id_1", uint64(leaf.ID))
+		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		d1 = bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
+		ks = bfrtC.MakeKeys(k1, k2)
+		ds = bfrtC.MakeData(d1)
+		entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Errorf("[Spine] Setting up table %s failed", table)
+			logrus.Fatal(entry)
+		}
+		table = "pipe_spine.SpineIngress.set_queue_len_unit_2"
+		action = "SpineIngress.act_set_queue_len_unit_2"
+		k1 = bfrtC.MakeExactKey("saqr_md.random_id_2", uint64(leaf.ID))
+		k2 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		d1 = bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
+		ks = bfrtC.MakeKeys(k1, k2)
+		ds = bfrtC.MakeData(d1)
+		entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Errorf("[Spine] Setting up table %s failed", table)
+			logrus.Fatal(entry)
+		}
+
+		// index (of qlen list) -> leafID mapping
+		table = "pipe_spine.SpineIngress.get_rand_leaf_id_1"
+		action = "SpineIngress.act_get_rand_leaf_id_1"
+		k1 = bfrtC.MakeExactKey("saqr_md.random_ds_index_1", uint64(i))
+		k2 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
+		ks = bfrtC.MakeKeys(k1, k2)
+		ds = bfrtC.MakeData(d1)
+		entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Errorf("[Spine] Setting up table %s failed", table)
+			logrus.Fatal(entry)
+		}
+		table = "pipe_spine.SpineIngress.get_rand_leaf_id_2"
+		action = "SpineIngress.act_get_rand_leaf_id_2"
+		k1 = bfrtC.MakeExactKey("saqr_md.random_ds_index_2", uint64(i))
+		k2 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
+		ks = bfrtC.MakeKeys(k1, k2)
+		ds = bfrtC.MakeData(d1)
+		entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Errorf("[Spine] Setting up table %s failed", table)
+			logrus.Fatal(entry)
+		}
+	}
+
+	reg := "pipe_spine.SpineIngress.idle_count"
+	rentry := bfrtclient.NewRegisterEntry(reg, uint64(0), uint64(len(spine.Children)), nil)
+	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+		logrus.Fatalf("[Spine] Setting up register %s failed", reg)
+	}
+
+	// vcID -> #leaves mapping
+	table := "pipe_spine.SpineIngress.get_cluster_num_valid_leafs"
+	action := "SpineIngress.act_get_cluster_num_valid_leafs"
+	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+	d1 := bfrtC.MakeBytesData("num_leafs", uint64(len(spine.Children)))
+	ks := bfrtC.MakeKeys(k1)
+	ds := bfrtC.MakeData(d1)
+	entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+	if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+		logrus.Errorf("[Spine] Setting up table %s failed", table)
+		logrus.Fatal(entry)
+	}
+
+	c.init_random_adjust_tables()
+
+}
+
 func (c *spineController) Start() {
 	logrus.
 		WithFields(logrus.Fields{"ID": c.ID}).
@@ -410,5 +550,6 @@ func (c *spineController) Start() {
 		}
 	}
 
+	go c.init_spine_bfrt_setup()
 	go c.bus.Start()
 }

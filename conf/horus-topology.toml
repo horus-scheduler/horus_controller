@@ -23,6 +23,7 @@
         id = 0
         index = 0
         address = "0.0.0.0:6001"
+        port_id = 1
         mgmtAddress = "0.0.0.0:7001"
         servers = [0] # order matters
 
@@ -30,6 +31,7 @@
         id = 1
         index = 1
         address = "0.0.0.0:6002"
+        port_id = 1
         mgmtAddress = "0.0.0.0:7001"
         servers = [1] # order matters
 

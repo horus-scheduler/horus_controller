@@ -76,6 +76,12 @@ func NewSpineBus(ctrlID uint16,
 	}
 }
 
+func (bus *SpineBus) update_tables_leaf_change(leaf *model.Node) {
+	logrus.Debugf("[SpineBus-%d] Updating tables after leaf changes", bus.ctrlID)
+	//spine := bus.topology.GetNode(bus.ctrlID, model.NodeType_Spine)
+
+}
+
 func (bus *SpineBus) processIngress() {
 	for {
 		select {
@@ -87,6 +93,9 @@ func (bus *SpineBus) processIngress() {
 				if bus.topology != nil {
 					bus.topology.Debug()
 				}
+				// Parham: How can we access the info of the failed leaf here? Particularly we need the leafIndex
+				//leaf := bus.topology.GetNode(message.Leaf.Id, model.NodeType_Leaf)
+				//bus.update_tables_leaf_change(leaf)
 			}()
 		case message := <-bus.rpcFailedServers:
 			// TODO: receives a msg that a server had failed

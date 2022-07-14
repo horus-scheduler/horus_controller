@@ -19,7 +19,7 @@ type Node struct {
 	Address     string
 	MgmtAddress string
 	ID          uint16
-	PortId      uint16 // valid if Type == server
+	PortId      uint16 // valid if Type == server | leaf
 	Type        NodeType
 	Parent      *Node
 	Children    []*Node
