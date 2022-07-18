@@ -171,8 +171,8 @@ func (sc *switchManager) init_common_leaf_bfrt_setup(bfrtclient *bfrtC.Client) {
 func (sc *switchManager) init(cfg *rootConfig) {
 	logrus.Debugf("[Manager] Setting up switches table entries")
 	// Parham: Below are general leaf entries (common for all virtual leaves), so I used first leaf instance as client
-	// bfrtclient := sc.leaves[0].bfrt
-	// sc.init_common_leaf_bfrt_setup(bfrtclient)
+	bfrtclient := sc.leaves[0].bfrt
+	sc.init_common_leaf_bfrt_setup(bfrtclient)
 }
 
 func (sc *switchManager) Run() {

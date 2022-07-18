@@ -387,13 +387,16 @@ func (c *leafController) Shutdown() {
 func (c *spineController) init_random_adjust_tables() {
 	ctx := context.Background()
 	bfrtclient := c.bfrt
-	for i := 1; i <= 5; i++ {
+	for i := 1; i <= 3; i++ {
 		table_ds := "pipe_spine.SpineIngress.adjust_random_range_sq_leafs"
-		action := fmt.Sprintf("SpineIngress.adjust_random_leaf_index_%d", i)
-		k_ds_1 := bfrtC.MakeExactKey("saqr_md.cluster_num_valid_queue_signals", uint64(math.Pow(2, float64(i))))
+		keyValue := uint64(math.Pow(2, float64(i)))
+		action := fmt.Sprintf("SpineIngress.adjust_random_leaf_index_%d", keyValue)
+		k_ds_1 := bfrtC.MakeExactKey("saqr_md.cluster_num_valid_queue_signals", keyValue)
 		k_ds := bfrtC.MakeKeys(k_ds_1)
+		// logrus.Debugf("i=%d, key=%d, action=%s", i, uint64(math.Pow(2, float64(i))), action)
 		entry_ds := bfrtclient.NewTableEntry(table_ds, k_ds, action, nil, nil) // Parham: works with nil data?
 		if err := bfrtclient.InsertTableEntry(ctx, entry_ds); err != nil {
+			logrus.Error(err.Error())
 			logrus.Fatal(entry_ds)
 		}
 	}
@@ -423,6 +426,7 @@ func (c *spineController) init_spine_bfrt_setup() {
 		reg := "pipe_spine.SpineIngress.idle_list"
 		rentry := bfrtclient.NewRegisterEntry(reg, uint64(i), uint64(leaf.ID), nil)
 		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Error(err.Error())
 			logrus.Fatalf("[Spine] Setting up register %s failed", reg)
 		}
 
