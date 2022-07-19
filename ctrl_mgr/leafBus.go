@@ -229,7 +229,7 @@ func (e *LeafBus) processIngress() {
 					horusPkt, _ := horusLayer.(*horus_net.HorusPacket)
 					logrus.Debug(horusPkt)
 					// TODO: Which pkt type indicates a ping from the client?
-					if horusPkt.PktType == horus_net.PKT_TYPE_WORKER_ID {
+					if horusPkt.PktType == horus_net.PKT_TYPE_KEEP_ALIVE {
 						// Start the Ping-pong protocol
 						nodeID := horusPkt.SrcID
 						// Update the health manager
@@ -237,9 +237,10 @@ func (e *LeafBus) processIngress() {
 
 						// Send the Pong pkt?
 						// TODO: modify the index (zero) and pkt type if needed
-						newPktBytes := pkt.Data()
-						newPktBytes[0] = byte(horus_net.PKT_TYPE_WORKER_ID_ACK)
-						e.asicEgress <- newPktBytes
+						// Parham: Sending pong not needed (worker doesn't need to check if leaf failed)
+						// newPktBytes := pkt.Data()
+						// newPktBytes[0] = byte(horus_net.PKT_TYPE_WORKER_ID_ACK)
+						// e.asicEgress <- newPktBytes
 					}
 					// TODO: do we need to process receiving other pkt types?
 				}

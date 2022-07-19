@@ -63,11 +63,13 @@ var LayerTypeHorus = gopacket.RegisterLayerType(
 )
 
 func InitHorusDefinitions() {
-	layers.EthernetTypeMetadata[LayerTypeHorus] = layers.EnumMetadata{
-		DecodeWith: gopacket.DecodeFunc(decodeHorus),
-		Name:       "Horus",
-		LayerType:  LayerTypeHorus,
-	}
+	// layers.EthernetTypeMetadata[LayerTypeHorus] = layers.EnumMetadata{
+	// 	DecodeWith: gopacket.DecodeFunc(decodeHorus),
+	// 	Name:       "Horus",
+	// 	LayerType:  LayerTypeHorus,
+	// }
+	log.Println("Init Horus Definitions")
+	layers.RegisterUDPPortLayerType(HORUS_UDP_PORT, LayerTypeHorus)
 }
 
 // When we inquire about the type, what type of layer should
@@ -126,11 +128,11 @@ func (horus *HorusPacket) DecodeFromBytes(data []byte, df gopacket.DecodeFeedbac
 		return errors.New("horus_hdr packet too small")
 	}
 	horus.PktType = byte(data[0])
-	horus.ClusterID = binary.BigEndian.Uint16(data[1:3])
-	horus.SrcID = binary.BigEndian.Uint16(data[3:5])
-	horus.DstID = binary.BigEndian.Uint16(data[5:7])
-	horus.QLen = binary.BigEndian.Uint16(data[7:9])
-	horus.SeqNum = binary.BigEndian.Uint16(data[9:11])
+	horus.ClusterID = binary.LittleEndian.Uint16(data[1:3])
+	horus.SrcID = binary.LittleEndian.Uint16(data[3:5])
+	horus.DstID = binary.LittleEndian.Uint16(data[5:7])
+	horus.QLen = binary.LittleEndian.Uint16(data[7:9])
+	horus.SeqNum = binary.LittleEndian.Uint16(data[9:11])
 
 	horus.BaseLayer = layers.BaseLayer{Contents: data[:11], Payload: data[12:]}
 	return nil
@@ -183,7 +185,7 @@ func CreateFullHorusPacket(horus *HorusPacket,
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{
 		ComputeChecksums: false,
-		FixLengths:       false,
+		FixLengths:       true,
 	}
 	err = gopacket.SerializeLayers(buf, opts, pktLayers...)
 	if err != nil {
@@ -214,6 +216,9 @@ func TestHorusPkt(pkt_type byte,
 		log.Println(len(pktBytes))
 
 		pkt := gopacket.NewPacket(pktBytes, layers.LayerTypeEthernet, gopacket.Default)
+		for _, layer := range pkt.Layers() {
+			log.Println("PACKET LAYER:", layer.LayerType())
+		}
 		if horusLayer := pkt.Layer(LayerTypeHorus); horusLayer != nil {
 			// Get actual Mdc data from this layer
 			horus, _ := horusLayer.(*HorusPacket)
@@ -224,6 +229,8 @@ func TestHorusPkt(pkt_type byte,
 			newPktBytes := pkt.Data()
 			newPktBytes[14] = byte(PKT_TYPE_WORKER_ID)
 			log.Println(newPktBytes)
+		} else {
+			log.Println("Error! pkt layer Horus not valid!")
 		}
 	}
 }
