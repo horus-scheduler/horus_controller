@@ -243,7 +243,7 @@ func test_fail_three_servers_then_leaf(pool *grpcpool.Pool) {
 func test_add_two_servers(pool *grpcpool.Pool) {
 	time.Sleep(5 * time.Second)
 	// Parham: modified call to addLeaf dummy port for leaf (44)
-	addLeaf(pool, 0, 44, 1, 0, "0.0.0.0:6001", "0.0.0.0:7001")
+	addLeaf(pool, 0, 44, 65535, 0, "0.0.0.0:6001", "0.0.0.0:7001")
 	time.Sleep(5 * time.Second)
 	// This one should succeed
 	addServer(pool, 9, 1, 8, "99:99:99:99:99:99", 0)
@@ -253,7 +253,7 @@ func test_add_two_servers(pool *grpcpool.Pool) {
 
 func test_add_leaf_with_servers_then_fail(pool *grpcpool.Pool) {
 	// Parham: modified call to addLeaf dummy port for leaf (44)
-	addLeaf(pool, 3, 44, 1, 0, "0.0.0.0:6004", "0.0.0.0:7001")
+	addLeaf(pool, 3, 44, 65535, 0, "0.0.0.0:6004", "0.0.0.0:7001")
 	time.Sleep(5 * time.Second)
 	addServer(pool, 10, 1, 8, "aa:aa:aa:aa:aa:aa", 3)
 	time.Sleep(time.Second)
@@ -266,7 +266,7 @@ func test_leaf_index(pool *grpcpool.Pool) {
 	failLeaf(pool, 1)
 	time.Sleep(5 * time.Second)
 	// Parham: modified call to addLeaf dummy port for leaf (44)
-	addLeaf(pool, 3, 44, 1, 0, "0.0.0.0:6004", "0.0.0.0:7001")
+	addLeaf(pool, 3, 44, 65535, 0, "0.0.0.0:6004", "0.0.0.0:7001")
 	time.Sleep(5 * time.Second)
 	addServer(pool, 10, 1, 8, "aa:aa:aa:aa:aa:aa", 3)
 	time.Sleep(time.Second)
