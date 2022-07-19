@@ -276,7 +276,7 @@ func test_leaf_index(pool *grpcpool.Pool) {
 func main() {
 	pool := createPool()
 	getTopology(pool)
-	// test_leaf_index(pool)
+	test_leaf_index(pool)
 	// test_fail_three_servers_then_leaf(pool)
 	// test_add_two_servers(pool)
 	// test_add_leaf_with_servers_then_fail(pool)

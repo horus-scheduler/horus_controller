@@ -162,7 +162,7 @@ func (c *leafController) init_leaf_bfrt_setup() {
 	// Khaled: Currently, getting the spine Index isn't supported
 	var spineIdx uint64 = 0
 
-	logrus.Debugf("[Leaf] Setting up tables for leaf %d", leafIdx)
+	logrus.Debugf("[Leaf] Setting up tables for leaf ID=%d, Index=%d", leaf.ID, leafIdx)
 	bfrtclient := c.bfrt
 
 	/*

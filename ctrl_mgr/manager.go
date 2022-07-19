@@ -195,7 +195,7 @@ func (sc *switchManager) Run() {
 		select {
 		case newLeaf := <-sc.newLeaves:
 			leafID := uint16(newLeaf.Leaf.Id)
-			logrus.Debugf("[Manager] Adding leaf %d", leafID)
+			logrus.Debugf("[Manager] Adding leaf: ID=%d", leafID)
 			sc.Lock()
 			logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
 			// leafCtrl := NewLeafController(leafID, sc.topoFp, sc.cfg,

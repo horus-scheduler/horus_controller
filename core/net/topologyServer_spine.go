@@ -62,6 +62,7 @@ func (s *spineSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafInf
 		return &horus_pb.HorusResponse{Status: "FAILED"}, nil
 	}
 	if leaf.Parent != nil {
+		leafInfo.Index = uint32(leaf.Index)
 		s.newLeavesToRPC <- NewLeafAddedMessage(leafInfo, leaf)
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}
@@ -77,6 +78,7 @@ func (s *spineSrvServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.LeafIn
 		logrus.Debugf("[SpineTopoServer] Leaf %d doesn't exist", leafID)
 		return &horus_pb.HorusResponse{Status: "FAILD"}, nil
 	}
+	leafInfo.Index = uint32(leaf.Index)
 	logrus.Debugf("[SpineTopoServer] Failing a leaf %d at Spine", leafID)
 	detached := s.vcm.DetachLeaf(leafID)
 	leafIdx, updatedLeaves := s.topology.RemoveLeaf(leafID)

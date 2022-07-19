@@ -79,7 +79,6 @@ func NewSpineBus(ctrlID uint16,
 func (bus *SpineBus) update_tables_leaf_change(leaf *model.Node) {
 	logrus.Debugf("[SpineBus-%d] Updating tables after leaf changes", bus.ctrlID)
 	//spine := bus.topology.GetNode(bus.ctrlID, model.NodeType_Spine)
-
 }
 
 func (bus *SpineBus) processIngress() {
@@ -89,13 +88,14 @@ func (bus *SpineBus) processIngress() {
 			// TODO: receives a msg that a leaf had failed
 			// Notice: At this stage, the failed leaf has already been removed and detached
 			go func() {
-				logrus.Debugf("[SpineBus-%d] Using BfRt Client to remove leaf-related DP info from spine; leafID = %d", bus.ctrlID, message.Leaf.Id)
+				logrus.Debugf("[SpineBus-%d] Using BfRt Client to remove leaf-related DP info from spine; leafID = %d, leafIndex= %d",
+					bus.ctrlID, message.Leaf.Id, message.Leaf.Index)
 				if bus.topology != nil {
 					bus.topology.Debug()
 				}
 				// Parham: How can we access the info of the failed leaf here? Particularly we need the leafIndex
-				//leaf := bus.topology.GetNode(message.Leaf.Id, model.NodeType_Leaf)
-				//bus.update_tables_leaf_change(leaf)
+				// leaf := bus.topology.GetNode(message.Leaf.Id, model.NodeType_Leaf)
+				// bus.update_tables_leaf_change(leaf)
 			}()
 		case message := <-bus.rpcFailedServers:
 			// TODO: receives a msg that a server had failed
@@ -110,7 +110,10 @@ func (bus *SpineBus) processIngress() {
 			// TODO: receives a msg that a leaf was added
 			// Notice: At this stage, the added leaf has already been added to the topology
 			go func() {
-				logrus.Debugf("[SpineBus-%d] Using BfRt Client to add leaf-related DP info at spine; leafID = %d", bus.ctrlID, message.Leaf.Id)
+				logrus.Debugf("[SpineBus-%d] Using BfRt Client to add leaf-related DP info at spine; leaf ID=%d, Index=%d",
+					bus.ctrlID,
+					message.Leaf.Id,
+					message.Leaf.Index)
 				if bus.topology != nil {
 					bus.topology.Debug()
 				}
