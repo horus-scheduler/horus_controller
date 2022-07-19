@@ -13,6 +13,7 @@ import (
 	horus_net "github.com/horus-scheduler/horus_controller/core/net"
 	horus_pb "github.com/horus-scheduler/horus_controller/protobuf"
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
+	"github.com/khaledmdiab/bfrt-go-client/pkg/pb"
 	"github.com/sirupsen/logrus"
 )
 
@@ -53,6 +54,7 @@ type spineController struct {
 }
 
 type TopologyOption func(*model.Topology) error
+type BfrtUpdateFn func(context.Context, *pb.TableEntry) error
 
 func WithExtraLeaf(leafInfo *horus_pb.LeafInfo) TopologyOption {
 	return func(topo *model.Topology) error {
@@ -142,6 +144,34 @@ func NewSpineController(ctrlID uint16, pipeID uint32, topoFp string, cfg *rootCo
 func (c *controller) Start() {
 }
 
+func updateOrInsert(ctx context.Context,
+	ctrlStr string,
+	client *bfrtC.Client,
+	table string,
+	ks []bfrtC.IKeyField,
+	action string,
+	ds []bfrtC.IDataField) error {
+	var bfrtFn BfrtUpdateFn = nil
+	entry := client.NewTableEntry(table, ks, action, ds, nil)
+	// If the table has this entry -> Insert
+	if ent, _ := client.ReadTableEntry(ctx, table, ks); ent != nil {
+		logrus.Debugf("[%s] Table %s has an entry; key=%s. Updating this entry", ctrlStr, table, entry.GetKey().String())
+		bfrtFn = client.ModifyTableEntry
+	} else {
+		logrus.Debugf("[%s] Table %s has NO entry; key=%s. Inserting a new entry", ctrlStr, table, entry.GetKey().String())
+		bfrtFn = client.InsertTableEntry
+	}
+
+	if bfrtFn != nil {
+		if err := bfrtFn(ctx, entry); err != nil {
+			return fmt.Errorf("[%s] Setting up table %s failed. Error=%s", ctrlStr, table, err.Error())
+		}
+	} else {
+		return fmt.Errorf("[%s] Setting up table %s failed. No update function is found", ctrlStr, table)
+	}
+	return nil
+}
+
 func (c *leafController) init_leaf_bfrt_setup() {
 	ctx := context.Background()
 
@@ -213,10 +243,10 @@ func (c *leafController) init_leaf_bfrt_setup() {
 			d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
 			d2 := bfrtC.MakeBytesData("dst_mac", mac_data)
 			ds := bfrtC.MakeData(d1, d2)
-			entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-			if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-				logrus.Errorf("[Leaf] Setting up table %s failed", table)
-				logrus.Fatal(entry)
+
+			err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+			if err != nil {
+				logrus.Fatal(err.Error())
 			}
 		}
 	}
@@ -237,10 +267,9 @@ func (c *leafController) init_leaf_bfrt_setup() {
 	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(len(c.cfg.Spines)))
 	ks := bfrtC.MakeKeys(k1)
 	ds := bfrtC.MakeData(d1, d2)
-	entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-	if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-		logrus.Errorf("[Leaf] Setting up table %s failed", table)
-		logrus.Fatal(entry)
+	err := updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+	if err != nil {
+		logrus.Fatal(err.Error())
 	}
 
 	// Table entries for port mapping of available upstream spines
@@ -252,10 +281,9 @@ func (c *leafController) init_leaf_bfrt_setup() {
 		ks := bfrtC.MakeKeys(k1, k2)
 		d1 := bfrtC.MakeBytesData("spine_dst_id", uint64(spine.ID))
 		ds := bfrtC.MakeData(d1)
-		entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-			logrus.Errorf("[Leaf] Setting up table %s failed", table)
-			logrus.Fatal(entry)
+		err := updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+		if err != nil {
+			logrus.Fatal(err.Error())
 		}
 	}
 
@@ -267,10 +295,9 @@ func (c *leafController) init_leaf_bfrt_setup() {
 	d1 = bfrtC.MakeBytesData("cluster_unit", uint64(qlen_unit))
 	ks = bfrtC.MakeKeys(k1)
 	ds = bfrtC.MakeData(d1)
-	entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-	if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-		logrus.Errorf("[Leaf] Setting up table %s failed", table)
-		logrus.Fatal(entry)
+	err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+	if err != nil {
+		logrus.Fatal(err.Error())
 	}
 }
 

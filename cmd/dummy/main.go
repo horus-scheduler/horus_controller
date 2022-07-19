@@ -267,7 +267,7 @@ func test_leaf_index(pool *grpcpool.Pool) {
 	time.Sleep(5 * time.Second)
 	// Parham: modified call to addLeaf dummy port for leaf (44)
 	addLeaf(pool, 3, 44, 65535, 0, "0.0.0.0:6004", "0.0.0.0:7001")
-	time.Sleep(5 * time.Second)
+	time.Sleep(25 * time.Second)
 	addServer(pool, 10, 1, 8, "aa:aa:aa:aa:aa:aa", 3)
 	time.Sleep(time.Second)
 	addServer(pool, 11, 1, 8, "bb:bb:bb:bb:bb:bb", 3)

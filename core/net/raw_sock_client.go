@@ -97,11 +97,14 @@ func (rsc *RawSockClient) reconnect() {
 
 func (rsc *RawSockClient) reader() {
 	var buf []byte
+
+	rsc.connLock.RLock()
 	if rsc.ifi != nil {
 		buf = make([]byte, rsc.ifi.MTU)
 	} else {
 		buf = make([]byte, 1500)
 	}
+	rsc.connLock.RUnlock()
 
 	for {
 		rsc.connLock.RLock()
@@ -128,11 +131,13 @@ func (rsc *RawSockClient) reader() {
 					//log.Println("Ethernet Type: ", buf[12], buf[13])
 				}
 				rsc.recvChan <- buf[0:n]
+				rsc.connLock.RLock()
 				if rsc.ifi != nil {
 					buf = make([]byte, rsc.ifi.MTU)
 				} else {
 					buf = make([]byte, 1500)
 				}
+				rsc.connLock.RUnlock()
 			}
 		}
 	}
