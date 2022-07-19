@@ -36,7 +36,8 @@ func NewAsicEndPoint(ifName string,
 	asicEgress chan []byte) *asicEndPoint {
 
 	client := horus_net.NewRawSockClient(ifName, asicEgress, asicIngress)
-
+	client.Connect()
+	horus_net.TestHorusPkt(horus_net.PKT_TYPE_KEEP_ALIVE, 0, 12, 16, 123, []byte("Dummy"))
 	leafIngress := model.NewByteChanMap()
 	leafEgress := model.NewByteChanMap()
 	spineIngress := model.NewByteChanMap()
@@ -66,6 +67,7 @@ func NewAsicEndPoint(ifName string,
 }
 
 func (a *asicEndPoint) Start() {
+	go a.client.Start()
 	go a.read()
 	go a.write()
 	<-a.doneChan
@@ -94,16 +96,21 @@ func (a *asicEndPoint) read() {
 	for {
 		select {
 		case msg := <-a.asicIngress:
+			//logrus.Debug("[ASIC] Received msg: %s", msg)
 			pkt := gopacket.NewPacket(msg, layers.LayerTypeEthernet, gopacket.Default)
 			if horusLayer := pkt.Layer(horus_net.LayerTypeHorus); horusLayer != nil {
 				horus, _ := horusLayer.(*horus_net.HorusPacket)
 				dstID := horus.DstID
+				//logrus.Debug("[ASIC] Received Horus pkt type ", horus.PktType)
 				ch, found := a.leafIngress.Load(dstID)
+				//logrus.Debug("[ASIC] Dst ID ", dstID)
 				if found {
 					ch <- pkt.Data()
 				} else {
 					logrus.Warnf("[ASIC] Leaf controller %d does not exist", dstID)
 				}
+			} else {
+				logrus.Warnf("[ASIC] Ctrl pkt from ASIC not in correct format")
 			}
 		}
 	}
