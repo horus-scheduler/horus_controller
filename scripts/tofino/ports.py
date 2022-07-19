@@ -41,7 +41,7 @@ links_by_cages = {
     ('30/0', '100G', 'NONE', 0),
     }
 
-links_by_dp = {}
+links_by_dp = set()
 
 for port_tuple in links_by_cages:
     if len(port_tuple) != 4:
@@ -58,7 +58,7 @@ for port_tuple in links_by_cages:
                 lane = int(port_spec[1])
                 dp = bfrt.port.port_hdl_info.get(CONN_ID=cage, CHNL_ID=lane, print_ents=False).data[b'$DEV_PORT']
                 links_by_dp.add((dp, port_tuple[1], port_tuple[2], port_tuple[3]))
-            
+
 for dp_tuple in links_by_dp:
     dp = dp_tuple[0]
     speed = dp_tuple[1]
@@ -74,7 +74,7 @@ for dp_tuple in links_by_dp:
     if fec in FEC_MAP:
         bf_fec = FEC_MAP[fec]
     if an in AN_MAP:
-        bf_an = FEC_MAP[an]
+        bf_an = AN_MAP[an]
     
     if bf_speed != '' and bf_fec != '' and bf_an != '':
         bfrt.port.port.add(DEV_PORT=dp, 
