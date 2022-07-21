@@ -1,6 +1,8 @@
 package ctrl_mgr
 
 import (
+	"context"
+
 	"github.com/horus-scheduler/horus_controller/core"
 	"github.com/horus-scheduler/horus_controller/core/model"
 	horus_net "github.com/horus-scheduler/horus_controller/core/net"
@@ -76,9 +78,100 @@ func NewSpineBus(ctrlID uint16,
 	}
 }
 
-func (bus *SpineBus) update_tables_leaf_change(leaf *model.Node) {
+func (bus *SpineBus) update_tables_leaf_change(leafID uint64, index uint64) {
 	logrus.Debugf("[SpineBus-%d] Updating tables after leaf changes", bus.ctrlID)
-	//spine := bus.topology.GetNode(bus.ctrlID, model.NodeType_Spine)
+	spine := bus.topology.GetNode(bus.ctrlID, model.NodeType_Spine)
+
+	INVALID_VAL_16bit := uint64(0x7FFF)
+	ctx := context.Background()
+	bfrtclient := bus.bfrt
+	vcID := uint64(0)
+	idleCount := uint64(0)
+
+	regIdleCount := "pipe_spine.SpineIngress.idle_count"
+	val, err1 := bfrtclient.ReadRegister(ctx, regIdleCount, vcID)
+	idleCount = val
+	if err1 != nil {
+		logrus.Fatal("Cannot read register")
+	}
+
+	regIdleIdxMap := "pipe_spine.SpineIngress.idle_list_idx_mapping"
+	indexAtIdleList, err1 := bfrtclient.ReadRegister(ctx, regIdleIdxMap, leafID)
+	if err1 != nil {
+		logrus.Fatal("Cannot read register")
+	}
+	if indexAtIdleList != INVALID_VAL_16bit { // Failed leaf was in the idle list of spine
+		logrus.Debugf("[SpineBus] failed leaf was in idle list at index %d", indexAtIdleList)
+		rentry := bfrtclient.NewRegisterEntry(regIdleIdxMap, leafID, INVALID_VAL_16bit, nil) // write invalid val on the mapping reg
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[SpineBus] Writing on register %s failed", regIdleIdxMap)
+		}
+		if indexAtIdleList < idleCount-1 { // Read Idle list and swap write the last element on the index of the recently failed leaf
+			// Read last idle list element
+			regIdleList := "pipe_spine.SpineIngress.idle_list"
+			lastElement, _ := bfrtclient.ReadRegister(ctx, regIdleList, idleCount-1)
+			rentry = bfrtclient.NewRegisterEntry(regIdleList, indexAtIdleList, lastElement, nil) // write last element on new index
+			if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+				logrus.Fatalf("[SpineBus] Writing on register %s failed", regIdleList)
+			}
+		}
+		// Decrement idle count
+		rentry = bfrtclient.NewRegisterEntry(regIdleCount, vcID, idleCount-1, nil)
+	}
+
+	// Decrement total number of available children
+	table := "pipe_spine.SpineIngress.get_cluster_num_valid_leafs"
+	action := "SpineIngress.act_get_cluster_num_valid_leafs"
+	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+	d1 := bfrtC.MakeBytesData("num_leafs", uint64(len(spine.Children)))
+	ks := bfrtC.MakeKeys(k1)
+	ds := bfrtC.MakeData(d1)
+	err := updateOrInsert(ctx, "Spine", bfrtclient, table, ks, action, ds)
+	if err != nil {
+		logrus.Fatal(err.Error())
+	}
+
+	// Parham: Assuming leaf IDs stay the same after failure but leaf indices were updated accordingly?
+	for _, leaf := range spine.Children {
+		// index (of qlen list) -> leafID mapping
+		table := "pipe_spine.SpineIngress.get_rand_leaf_id_1"
+		action := "SpineIngress.act_get_rand_leaf_id_1"
+		k1 := bfrtC.MakeExactKey("saqr_md.random_ds_index_1", uint64(leaf.Index))
+		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
+		ks = bfrtC.MakeKeys(k1, k2)
+		ds = bfrtC.MakeData(d1)
+		err := updateOrInsert(ctx, "Spine", bfrtclient, table, ks, action, ds)
+		if err != nil {
+			logrus.Fatal(err.Error())
+		}
+
+		table = "pipe_spine.SpineIngress.get_rand_leaf_id_2"
+		action = "SpineIngress.act_get_rand_leaf_id_2"
+		k1 = bfrtC.MakeExactKey("saqr_md.random_ds_index_2", uint64(leaf.Index))
+		k2 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
+		ks = bfrtC.MakeKeys(k1, k2)
+		ds = bfrtC.MakeData(d1)
+		err = updateOrInsert(ctx, "Spine", bfrtclient, table, ks, action, ds)
+		if err != nil {
+			logrus.Fatal(err.Error())
+		}
+
+		// Mapping leafID -> index (of qlen list)
+		table = "pipe_spine.SpineIngress.get_switch_index"
+		action = "SpineIngress.act_get_switch_index"
+		k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		k2 = bfrtC.MakeExactKey("hdr.saqr.src_id", uint64(leaf.ID))
+		d1 = bfrtC.MakeBytesData("switch_index", uint64(leaf.Index))
+		ks = bfrtC.MakeKeys(k1, k2)
+		ds = bfrtC.MakeData(d1)
+		err = updateOrInsert(ctx, "Spine", bfrtclient, table, ks, action, ds)
+		if err != nil {
+			logrus.Fatal(err.Error())
+		}
+	}
+
 }
 
 func (bus *SpineBus) processIngress() {
@@ -93,9 +186,7 @@ func (bus *SpineBus) processIngress() {
 				if bus.topology != nil {
 					bus.topology.Debug()
 				}
-				// Parham: How can we access the info of the failed leaf here? Particularly we need the leafIndex
-				// leaf := bus.topology.GetNode(message.Leaf.Id, model.NodeType_Leaf)
-				// bus.update_tables_leaf_change(leaf)
+				bus.update_tables_leaf_change(uint64(message.Leaf.Id), uint64(message.Leaf.Index))
 			}()
 		case message := <-bus.rpcFailedServers:
 			// TODO: receives a msg that a server had failed

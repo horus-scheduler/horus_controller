@@ -529,6 +529,20 @@ func (c *spineController) init_spine_bfrt_setup() {
 			logrus.Errorf("[Spine] Setting up table %s failed", table)
 			logrus.Fatal(entry)
 		}
+
+		// Mapping leafID -> index (of qlen list)
+		table = "pipe_spine.SpineIngress.get_switch_index"
+		action = "SpineIngress.act_get_switch_index"
+		k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		k2 = bfrtC.MakeExactKey("hdr.saqr.src_id", uint64(leaf.ID))
+		d1 = bfrtC.MakeBytesData("switch_index", uint64(i))
+		ks = bfrtC.MakeKeys(k1, k2)
+		ds = bfrtC.MakeData(d1)
+		entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Errorf("[Spine] Setting up table %s failed", table)
+			logrus.Fatal(entry)
+		}
 	}
 
 	reg := "pipe_spine.SpineIngress.idle_count"
