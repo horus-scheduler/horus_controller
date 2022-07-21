@@ -104,9 +104,9 @@ func (e *LeafBus) update_tables_server_change(leaf *model.Node, hmMsg *core.Leaf
 	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(2)) // put constant here works in our testbed but should be modified
 	ks := bfrtC.MakeKeys(k1)
 	ds := bfrtC.MakeData(d1, d2)
-	entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-	if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-		logrus.Fatal(entry)
+	err := updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+	if err != nil {
+		logrus.Fatal(err.Error())
 	}
 
 	// Update server port mappings
@@ -128,9 +128,9 @@ func (e *LeafBus) update_tables_server_change(leaf *model.Node, hmMsg *core.Leaf
 			d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
 			d2 := bfrtC.MakeBytesData("dst_mac", mac_data)
 			ds := bfrtC.MakeData(d1, d2)
-			entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-			if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-				logrus.Fatal(entry)
+			err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+			if err != nil {
+				logrus.Fatal(err.Error())
 			}
 		}
 	}
@@ -142,9 +142,9 @@ func (e *LeafBus) update_tables_server_change(leaf *model.Node, hmMsg *core.Leaf
 	d1 = bfrtC.MakeBytesData("hdr.saqr.cluster_id", uint64(qlen_unit))
 	ks = bfrtC.MakeKeys(k1)
 	ds = bfrtC.MakeData(d1)
-	entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-	if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-		logrus.Fatal(entry)
+	err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+	if err != nil {
+		logrus.Fatal(err.Error())
 	}
 }
 
