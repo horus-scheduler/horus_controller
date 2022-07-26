@@ -131,7 +131,39 @@ func (bus *SpineBus) update_tables_leaf_change(leafID uint64, index uint64) {
 		logrus.Fatal(err.Error())
 	}
 
-	// Parham: Assuming leaf IDs stay the same after failure but leaf indices were updated accordingly?
+	// Copy and shift to left cell the queue len lists for every index i where i < falied leaf index
+	// Parham: We need to check since these are being modified by data plane it might be already updated by leaf and this move
+	// results in incorrect state until next queue signal arrives from the leaf
+	for i := int(index) + 1; i <= len(spine.Children); i++ {
+		qlenList1 := "pipe_spine.SpineIngress.queue_len_list_1"
+		qlenList2 := "pipe_spine.SpineIngress.queue_len_list_2"
+		defList1 := "pipe_spine.SpineIngress.deferred_queue_len_list_1"
+		defList2 := "pipe_spine.SpineIngress.deferred_queue_len_list_2"
+
+		nextCellQlen, _ := bfrtclient.ReadRegister(ctx, qlenList1, uint64(i))
+		nextCellDrift, _ := bfrtclient.ReadRegister(ctx, defList1, uint64(i))
+
+		rentry := bfrtclient.NewRegisterEntry(qlenList1, uint64(i-1), nextCellQlen+nextCellDrift, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[SpineBus] Writing on register %s failed", qlenList1)
+		}
+		rentry = bfrtclient.NewRegisterEntry(qlenList2, uint64(i-1), nextCellQlen+nextCellDrift, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[SpineBus] Writing on register %s failed", qlenList2)
+		}
+
+		// reset drift
+		rentry = bfrtclient.NewRegisterEntry(defList1, uint64(i-1), 0, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[SpineBus] Writing on register %s failed", defList1)
+		}
+		rentry = bfrtclient.NewRegisterEntry(defList2, uint64(i-1), 0, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[SpineBus] Writing on register %s failed", defList2)
+		}
+	}
+
+	// Parham: Assuming leaf IDs stay the same after failure but leaf indices were updated accordingly
 	for _, leaf := range spine.Children {
 		// index (of qlen list) -> leafID mapping
 		table := "pipe_spine.SpineIngress.get_rand_leaf_id_1"
@@ -171,7 +203,6 @@ func (bus *SpineBus) update_tables_leaf_change(leafID uint64, index uint64) {
 			logrus.Fatal(err.Error())
 		}
 	}
-
 }
 
 func (bus *SpineBus) processIngress() {
