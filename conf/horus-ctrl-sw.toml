@@ -36,6 +36,9 @@ level = "debug"
     [[controllers.leaves]]
         id = 2
         pipeID = 65535
+    [[controllers.leaves]]
+        id = 3
+        pipeID = 65535
     # spines = [0]
     # leaves = [0, 1, 2]
     

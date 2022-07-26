@@ -17,7 +17,7 @@
     [[topology.spines]]
         id = 0
         address = "0.0.0.0:5001"
-        leaves = [0, 1, 2]
+        leaves = [0, 1, 2, 3]
 
     [[topology.leaves]]
         id = 0
@@ -42,20 +42,37 @@
         mgmtAddress = "0.0.0.0:7001"
         servers = [2] # order matters
 
+    [[topology.leaves]]
+        id = 3
+        index = 3
+        address = "0.0.0.0:6004"
+        mgmtAddress = "0.0.0.0:7001"
+        servers = [3] # order matters
+     
+    #cs-nsl-55
     [[topology.servers]]
         id = 0
-        port_id = 1
-        address = "00:00:00:00:00:00"
+        port_id = 132
+        address = "F8:F2:1E:3A:13:EC"
         workers_count = 8
 
+    #cs-nsl-56
     [[topology.servers]]
         id = 1
-        port_id = 1
-        address = "11:11:11:11:11:11"
+        port_id = 134
+        address = "F8:F2:1E:3A:13:0C"
         workers_count = 8
-
+    
+    #cs-nsl-57
     [[topology.servers]]
         id = 2
-        port_id = 1
-        address = "22:22:22:22:22:22"
+        port_id = 140
+        address = "F8:F2:1E:3A:13:C4"
+        workers_count = 8
+
+    #cs-nsl-58
+    [[topology.servers]]
+        id = 3
+        port_id = 142
+        address = "F8:F2:1E:3A:07:24"
         workers_count = 8
