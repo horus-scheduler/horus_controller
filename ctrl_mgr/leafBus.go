@@ -1,8 +1,6 @@
 package ctrl_mgr
 
 import (
-	"context"
-	"encoding/binary"
 	"net"
 
 	"github.com/google/gopacket"
@@ -10,7 +8,6 @@ import (
 	"github.com/horus-scheduler/horus_controller/core"
 	"github.com/horus-scheduler/horus_controller/core/model"
 	horus_net "github.com/horus-scheduler/horus_controller/core/net"
-	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 	"github.com/sirupsen/logrus"
 )
 
@@ -50,17 +47,17 @@ type LeafBus struct {
 	healthMgr *core.LeafHealthManager
 	topology  *model.Topology
 	vcm       *core.VCManager
-	bfrt      *bfrtC.Client // BfRt client
+	cp        LeafCP
 	DoneChan  chan bool
 }
 
 // NewLeafBus ...
 func NewBareLeafBus(ctrlID uint16, busChan *LeafBusChan,
-	bfrt *bfrtC.Client) *LeafBus {
+	cp LeafCP) *LeafBus {
 	return &LeafBus{
 		LeafBusChan: busChan,
 		ctrlID:      ctrlID,
-		bfrt:        bfrt,
+		cp:          cp,
 		DoneChan:    make(chan bool, 1),
 	}
 }
@@ -80,71 +77,6 @@ func (e *LeafBus) SetTopology(topology *model.Topology) {
 func (e *LeafBus) SetVCManager(vcm *core.VCManager) {
 	if e.vcm == nil {
 		e.vcm = vcm
-	}
-}
-
-func (e *LeafBus) update_tables_server_change(leaf *model.Node, hmMsg *core.LeafHealthMsg) {
-	logrus.Debugf("[LeafBus-%d] Updating tables after server changes", e.ctrlID)
-
-	ctx := context.Background()
-	bfrtclient := e.bfrt
-	worker_count := uint16(0)
-	// Parham: findout number of alive workers
-	for _, server := range leaf.Children {
-		worker_count += server.LastWorkerID - server.FirstWorkerID + 1
-	}
-
-	// Update entires #available workers
-	table := "pipe_leaf.LeafIngress.get_cluster_num_valid"
-	action := "LeafIngress.act_get_cluster_num_valid"
-	// Parham: Assumed e.ctrlID is 0-indexed and indicates virtual leaf ID?
-	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(e.ctrlID))
-	d1 := bfrtC.MakeBytesData("num_ds_elements", uint64(worker_count))
-	// Parham: How can we access number of spines avilable (random linkage for idle count),
-	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(2)) // put constant here works in our testbed but should be modified
-	ks := bfrtC.MakeKeys(k1)
-	ds := bfrtC.MakeData(d1, d2)
-	err := updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
-	if err != nil {
-		logrus.Fatal(err.Error())
-	}
-
-	// Update server port mappings
-	table = "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
-	action = "LeafIngress.act_forward_saqr"
-	for _, server := range hmMsg.Updated {
-		for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
-			// Parham: Assumed e.ctrlID is 0-indexed and indicates virtual leaf ID?
-			index := uint16(e.ctrlID)*model.MAX_VCLUSTER_WORKERS + wid
-			// Table entries for worker index to port mappings
-			hw, err := net.ParseMAC(server.Address)
-			// Parham: TODO: Check endian not sure how bfrt client converted MACs originally
-			mac_data := binary.LittleEndian.Uint64(hw)
-			if err != nil {
-				logrus.Fatal(err)
-			}
-			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
-			ks := bfrtC.MakeKeys(k1)
-			d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
-			d2 := bfrtC.MakeBytesData("dst_mac", mac_data)
-			ds := bfrtC.MakeData(d1, d2)
-			err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
-			if err != nil {
-				logrus.Fatal(err.Error())
-			}
-		}
-	}
-	// Update qlen unit
-	qlen_unit, _ := model.WorkerQlenUnitMap[worker_count]
-	table = "pipe_leaf.LeafIngress.set_queue_len_unit"
-	action = "LeafIngress.act_set_queue_len_unit"
-	k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(e.ctrlID))
-	d1 = bfrtC.MakeBytesData("hdr.saqr.cluster_id", uint64(qlen_unit))
-	ks = bfrtC.MakeKeys(k1)
-	ds = bfrtC.MakeData(d1)
-	err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
-	if err != nil {
-		logrus.Fatal(err.Error())
 	}
 }
 
@@ -216,7 +148,7 @@ func (e *LeafBus) processIngress() {
 				}
 				leaf := e.topology.GetNode(e.ctrlID, model.NodeType_Leaf)
 				if leaf != nil {
-					e.update_tables_server_change(leaf, hmMsg)
+					e.cp.OnServerChange(hmMsg)
 				}
 			}()
 

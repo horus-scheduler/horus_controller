@@ -34,6 +34,7 @@ type rootConfig struct {
 	Spines      []_SpineConfig
 	Leaves      []_LeafConfig
 	Timeout     int64
+	ControlAPI  string
 }
 
 func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
@@ -66,6 +67,7 @@ func ReadConfigFile(configName string, configPaths ...string) *rootConfig {
 	cfg.BfrtAddress = viper.GetString("bfrt.address")
 	cfg.RemoteSrvServer = viper.GetString("centralized.srvAddress")
 	cfg.Timeout = viper.GetInt64("controllers.timeout")
+	cfg.ControlAPI = viper.GetString("controllers.controlAPI")
 	cfg.MgmtAddress = viper.GetString("controllers.mgmtAddress")
 	cfg.LogLevel = viper.GetString("log.level")
 	err = viper.UnmarshalKey("controllers.spines", &cfg.Spines)
