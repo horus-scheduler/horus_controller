@@ -15,7 +15,7 @@
 
 [topology]
     [[topology.spines]]
-        id = 0
+        id = 100
         address = "0.0.0.0:5001"
         leaves = [0, 1, 2, 3]
 
@@ -23,7 +23,7 @@
         id = 0
         index = 0
         address = "0.0.0.0:6001"
-        port_id = 1
+        port_id = 36
         mgmtAddress = "0.0.0.0:7001"
         servers = [0] # order matters
 
@@ -31,7 +31,7 @@
         id = 1
         index = 1
         address = "0.0.0.0:6002"
-        port_id = 1
+        port_id = 44
         mgmtAddress = "0.0.0.0:7001"
         servers = [1] # order matters
 
@@ -39,6 +39,7 @@
         id = 2
         index = 2
         address = "0.0.0.0:6003"
+        port_id = 20
         mgmtAddress = "0.0.0.0:7001"
         servers = [2] # order matters
 
@@ -46,6 +47,7 @@
         id = 3
         index = 3
         address = "0.0.0.0:6004"
+        port_id = 52
         mgmtAddress = "0.0.0.0:7001"
         servers = [3] # order matters
      

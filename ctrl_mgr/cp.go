@@ -268,9 +268,10 @@ func (cp *BfrtLeafCP_V1) Init() {
 
 			// Table entries for worker index to port mappings
 			hw, err := net.ParseMAC(server.Address)
-			// Parham: TODO: Check endian not sure how bfrt client converted MACs originally
-			hw = append(hw, make([]byte, 8-len(hw))...)
-			mac_data := binary.LittleEndian.Uint64(hw)
+			hw = append(make([]byte, 8-len(hw)), hw...)
+			//logrus.Debugf("[Leaf-%d] index %d hw %s", c.ID, index, hw)
+			mac_data := binary.BigEndian.Uint64(hw)
+
 			if err != nil {
 				logrus.Fatal(err)
 			}
@@ -372,8 +373,8 @@ func (cp *BfrtLeafCP_V1) OnServerChange(hmMsg *core.LeafHealthMsg) {
 			index := uint16(cp.leaf.ID)*model.MAX_VCLUSTER_WORKERS + wid
 			// Table entries for worker index to port mappings
 			hw, err := net.ParseMAC(server.Address)
-			// Parham: TODO: Check endian not sure how bfrt client converted MACs originally
-			mac_data := binary.LittleEndian.Uint64(hw)
+			hw = append(make([]byte, 8-len(hw)), hw...)
+			mac_data := binary.BigEndian.Uint64(hw)
 			if err != nil {
 				logrus.Fatal(err)
 			}
@@ -548,6 +549,22 @@ func (cp *BfrtSpineCP_V1) Init() {
 		logrus.Errorf("[Spine] Setting up table %s failed", table)
 		logrus.Fatal(entry)
 	}
+
+	// Client port mapping
+    for key, value := range model.ClientPortMap {
+        table := "pipe_spine.SpineIngress.forward_saqr_switch_dst"
+           
+        action := "SpineIngress.act_forward_saqr"
+        k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(key))
+        d1 := bfrtC.MakeBytesData("port", uint64(value))
+        ks := bfrtC.MakeKeys(k1)
+        ds := bfrtC.MakeData(d1)
+        entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+        if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+            logrus.Errorf("[Spine] Setting up table %s failed", table)
+            logrus.Fatal(entry)
+        }
+    }
 
 	cp.InitRandomAdjustTables()
 }

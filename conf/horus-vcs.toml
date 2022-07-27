@@ -1,6 +1,6 @@
 [[vc]]
     id = 0
-    spines = [0]
+    spines = [100]
         [[vc.servers]]
             id = 0
             workersIDs = [0, 2, 3]
@@ -10,7 +10,7 @@
 
 [[vc]]
     id = 1
-    spines = [0]
+    spines = [100]
         [[vc.servers]]
             id = 1
             workersIDs = [0, 1]

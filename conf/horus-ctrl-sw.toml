@@ -25,9 +25,9 @@ level = "debug"
     mgmtAddress = "0.0.0.0:7001"
     timeout = 1000 # in milliseconds
     # Options are: "fake" | "v1" | "v2"
-    controlAPI = "fake" 
+    controlAPI = "v1" 
     [[controllers.spines]]
-        id = 0
+        id = 100
         pipeID = 65535
     [[controllers.leaves]]
         id = 0
