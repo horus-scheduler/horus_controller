@@ -10,9 +10,9 @@ require (
 	github.com/processout/grpc-go-pool v1.2.1
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/viper v1.12.0
-	golang.org/x/net v0.0.0-20220728030405-41545e8bf201
+	golang.org/x/net v0.0.0-20220728181054-f92ba40d432d
 	google.golang.org/grpc v1.48.0
-	google.golang.org/protobuf v1.28.0
+	google.golang.org/protobuf v1.28.1
 )
 
 require (
