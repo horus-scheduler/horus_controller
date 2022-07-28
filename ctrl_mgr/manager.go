@@ -99,14 +99,15 @@ func NewSwitchManager(topoFp, cfgFp string, opts ...SwitchManagerOption) *switch
 
 func (sc *switchManager) init(cfg *rootConfig) {
 	logrus.Debugf("[Manager] Setting up switches table entries")
-	// Parham: Below are general leaf entries (common for all virtual leaves)
 
+	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.Leaves[0].PipeID))
+	client := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(1000), target)
 	if cfg.ControlAPI == "fake" {
 		sc.cp = NewFakeManagerCP()
 	} else if cfg.ControlAPI == "v1" {
-		target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(cfg.Leaves[0].PipeID))
-		client := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(1000), target)
 		sc.cp = NewBfrtManagerCP_V1(client)
+	} else if cfg.ControlAPI == "v2" {
+		sc.cp = NewBfrtManagerCP_V2(client)
 	} else {
 		logrus.Fatal("[Manager] Control API is invalid!")
 	}

@@ -115,13 +115,16 @@ func NewSpineController(ctrlID uint16, pipeID uint32, topoFp string, cfg *rootCo
 	newVCs := make(chan *horus_net.VCUpdatedMessage, horus_net.DefaultRpcRecvSize)
 
 	spine := topology.GetNode(ctrlID, model.NodeType_Spine)
+
+	target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(pipeID))
+	client := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(ctrlID), target)
 	var cp SpineCP
 	if cfg.ControlAPI == "fake" {
 		cp = NewFakeSpineCP(spine)
 	} else if cfg.ControlAPI == "v1" {
-		target := bfrtC.NewTarget(bfrtC.WithDeviceId(cfg.DeviceID), bfrtC.WithPipeId(pipeID))
-		client := bfrtC.NewClient(cfg.BfrtAddress, cfg.P4Name, uint32(ctrlID), target)
 		cp = NewBfrtSpineCP_V1(client, spine)
+	} else if cfg.ControlAPI == "v2" {
+		cp = NewBfrtSpineCP_V2(client, spine)
 	} else {
 		logrus.Fatal("[Spine] Control API is invalid!")
 	}
@@ -235,12 +238,14 @@ func (c *leafController) StartBare(fetchTopo bool) {
 	}
 
 	leaf := c.topology.GetNode(c.ID, model.NodeType_Leaf)
+	target := bfrtC.NewTarget(bfrtC.WithDeviceId(c.cfg.DeviceID), bfrtC.WithPipeId(c.pipeID))
+	client := bfrtC.NewClient(c.cfg.BfrtAddress, c.cfg.P4Name, uint32(c.ID), target)
 	if c.cfg.ControlAPI == "fake" {
 		c.cp = NewFakeLeafCP(leaf, c.cfg.Spines)
 	} else if c.cfg.ControlAPI == "v1" {
-		target := bfrtC.NewTarget(bfrtC.WithDeviceId(c.cfg.DeviceID), bfrtC.WithPipeId(c.pipeID))
-		client := bfrtC.NewClient(c.cfg.BfrtAddress, c.cfg.P4Name, uint32(c.ID), target)
 		c.cp = NewBfrtLeafCP_V1(client, leaf, c.cfg.Spines)
+	} else if c.cfg.ControlAPI == "v2" {
+		c.cp = NewBfrtLeafCP_V2(client, leaf, c.cfg.Spines)
 	} else {
 		logrus.Fatal("[Leaf] Control API is invalid!")
 	}
