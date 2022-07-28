@@ -1,19 +1,45 @@
-# Default topology
-#                                           Spine0
-#            +--------------------------------|--------------------------------+
-#            |                                |                                |
-#          Leaf0                            Leaf1                            Leaf2
-#    +-------|-------+                +-------|-------+                +-------|-------+
-#    |       |       |                |       |       |                |       |       |
-# Server0 Server1 Server2          Server3 Server4 Server5          Server6 Server7 Server8
-#    |       |       |                |       |       |                |       |       |
-# W00-W07 W08-W15 W16-W23          W00-W07 W08-W15 W16-W23          W00-W07 W08-W15 W16-W23
-
-# Important Notes:
-# The IDs of Spines, Leaves, and Servers are *global*, starting from 0
-# The IDs of workers per Leaf are local to that Leaf
+[ports]
+    # IMPORTNT NOTES: 
+    # 1. This works by specifying common port configs, each has a unique ID.
+    # Then, you define the a group of port specs with a specific port config.
+    # 2. Available Options (for [[ports.config]])
+    # id = "UniqueID" identifies this configuration to be used later
+    # speed = "1G" | "10G" | "25G" | "40G" | "50G" | "100G"
+    # fec = "NONE" | "FC" (firecode for 40G) | "RS" (Reed-Solomon for 100G)
+    # an = "AUTO" | "ENABLED" | "DISABLED"
+    # 3. Port Specs (used in [[ports.group]]):
+    # "cage/lane", where the lane is one value of {-,0,1,2,3}
+    # For example, "1/-" means ports "1/0", "1/1", "1/2" and "1/3"
+    # 4. It's your responsibility to ensure that the cage/lane 
+    # and speed values are consistent!
+    [[ports.config]]
+        id = "10G"
+        speed = "10G"
+        fec = "NONE"
+        an = "DISABLED"
+    
+    [[ports.config]]
+        id = "100G"
+        speed = "100G"
+        fec = "NONE"
+        an = "AUTO"
+        
+    [[ports.group]]
+        specs = ["1/-", "2/-", "3/-", 
+                 "4/-", "9/-"]
+        config = "10G"
+    
+    [[ports.group]]
+        specs = ["19/0", "20/0", "21/0", "22/0", 
+                 "23/0", "24/0", "25/0", "26/0", 
+                 "27/0", "28/0", "29/0", "30/0"]
+        config = "100G"
 
 [topology]
+    [[topology.clients]]
+        id = 110
+        port = "9/0" # client <-> spine
+
     [[topology.spines]]
         id = 100
         address = "0.0.0.0:5001"
@@ -24,6 +50,8 @@
         index = 0
         address = "0.0.0.0:6001"
         port_id = 36
+        us_port = "" # from leaf->spine
+        ds_port = "" # from spine->leaf
         mgmtAddress = "0.0.0.0:7001"
         servers = [0] # order matters
 
@@ -32,6 +60,8 @@
         index = 1
         address = "0.0.0.0:6002"
         port_id = 44
+        us_port = "" # from leaf->spine
+        ds_port = "" # from spine->leaf
         mgmtAddress = "0.0.0.0:7001"
         servers = [1] # order matters
 
@@ -40,6 +70,8 @@
         index = 2
         address = "0.0.0.0:6003"
         port_id = 20
+        us_port = "" # from leaf->spine
+        ds_port = "" # from spine->leaf
         mgmtAddress = "0.0.0.0:7001"
         servers = [2] # order matters
 
@@ -48,6 +80,8 @@
         index = 3
         address = "0.0.0.0:6004"
         port_id = 52
+        us_port = "" # from leaf->spine
+        ds_port = "" # from spine->leaf
         mgmtAddress = "0.0.0.0:7001"
         servers = [3] # order matters
      
@@ -55,6 +89,7 @@
     [[topology.servers]]
         id = 0
         port_id = 132
+        port = "" # server<->leaf
         address = "F8:F2:1E:3A:13:EC"
         workers_count = 8
 
@@ -62,6 +97,7 @@
     [[topology.servers]]
         id = 1
         port_id = 134
+        port = "" # server<->leaf
         address = "F8:F2:1E:3A:13:0C"
         workers_count = 8
     
@@ -69,6 +105,7 @@
     [[topology.servers]]
         id = 2
         port_id = 140
+        port = "" # server<->leaf
         address = "F8:F2:1E:3A:13:C4"
         workers_count = 8
 
@@ -76,5 +113,6 @@
     [[topology.servers]]
         id = 3
         port_id = 142
+        port = "" # server<->leaf
         address = "F8:F2:1E:3A:07:24"
         workers_count = 8
