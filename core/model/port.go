@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	horus_pb "github.com/horus-scheduler/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 )
 
@@ -45,13 +46,25 @@ func (pc *PortConfig) String() string {
 
 type Port struct {
 	Spec    *PortSpec
-	DevPort uint64
+	devPort uint64
 	Config  *PortConfig
 	Asic    *Asic
 }
 
+func (p *Port) SetDevPort(devPort uint64) {
+	if p.devPort == 0 {
+		p.devPort = devPort
+	} else {
+		logrus.Warnf("DEVPORT of Port (%s) was already set to %d", p.Spec.ID, p.devPort)
+	}
+}
+
+func (p *Port) GetDevPort() uint64 {
+	return p.devPort
+}
+
 func (p *Port) String() string {
-	return fmt.Sprintf("\t\t%s, DevPort=%d (%s)", p.Spec, p.DevPort, p.Config)
+	return fmt.Sprintf("\t\t%s, DevPort=%d (%s)", p.Spec, p.devPort, p.Config)
 }
 
 type PortSpec struct {
@@ -94,10 +107,10 @@ func NewPortSpec(cage uint64, lane uint64) *PortSpec {
 	}
 }
 
-func NewPort(asic *Asic, spec *PortSpec, devPort uint64, config *PortConfig) *Port {
+func NewPort(asic *Asic, spec *PortSpec, config *PortConfig) *Port {
 	return &Port{
 		Spec:    spec,
-		DevPort: devPort,
+		devPort: 0,
 		Config:  config,
 		Asic:    asic,
 	}
@@ -114,6 +127,54 @@ func (pr *PortRegistry) String() string {
 		lines = append(lines, port.String())
 	}
 	return strings.Join(lines, "\n")
+}
+
+func NewPortRegistryFromInfo(asic *Asic,
+	asicInfo *horus_pb.AsicInfo,
+	portConfigs []*horus_pb.PortConfigInfo) *PortRegistry {
+	pr := &PortRegistry{
+		ConfigMap: NewPortConfigMap(),
+		PortMap:   NewPortMap(),
+	}
+
+	for _, cfg := range portConfigs {
+		newPortCfg := &portConfig{
+			ID:    cfg.ID,
+			Speed: cfg.Speed,
+			Fec:   cfg.Fec,
+			An:    cfg.An,
+		}
+		portCfg, err := NewPortConfig(newPortCfg)
+		if err == nil {
+			_, found := pr.ConfigMap.Load(portCfg.ID)
+			if !found {
+				pr.ConfigMap.Store(portCfg.ID, portCfg)
+			} else {
+				logrus.Warnf("PortConfig with ID=%s exists. Ignoring the new one.", portCfg.ID)
+			}
+		} else {
+			logrus.Warn(err)
+		}
+	}
+
+	for _, portInfo := range asicInfo.PortsInfo {
+		cfgID := portInfo.PortConfig.ID
+		if portCfg, found := pr.ConfigMap.Load(cfgID); found {
+			spec := NewPortSpec(uint64(portInfo.Cage), uint64(portInfo.Lane))
+			_, found := pr.PortMap.Load(spec.ID)
+			if !found {
+				port := NewPort(asic, spec, portCfg)
+				pr.PortMap.Store(port.Spec.ID, port)
+			} else {
+				logrus.Warnf("PortSpec with ID=%s exists. Ignoring the new one.", spec.ID)
+			}
+
+		} else {
+			logrus.Warnf("PortConfig with ID=%s doesn't exists.", cfgID)
+		}
+	}
+
+	return pr
 }
 
 func NewPortRegistry(asic *Asic, portConfigs []*portConfig, portGroups []*portGroup) *PortRegistry {
@@ -138,7 +199,7 @@ func NewPortRegistry(asic *Asic, portConfigs []*portConfig, portGroups []*portGr
 	for _, port := range portGroups {
 		var allSpecs []*PortSpec
 		for _, specStr := range port.Specs {
-			portSpecs, err := ExpandPortSpec(specStr)
+			portSpecs, err := expandPortSpec(specStr)
 			allSpecs = append(allSpecs, portSpecs...)
 			if err != nil {
 				logrus.Warn(err)
@@ -149,7 +210,7 @@ func NewPortRegistry(asic *Asic, portConfigs []*portConfig, portGroups []*portGr
 			for _, spec := range allSpecs {
 				_, found := pr.PortMap.Load(spec.ID)
 				if !found {
-					port := NewPort(asic, spec, 0, portCfg)
+					port := NewPort(asic, spec, portCfg)
 					pr.PortMap.Store(port.Spec.ID, port)
 				} else {
 					logrus.Warnf("PortSpec with ID=%s exists. Ignoring the new one.", spec.ID)
@@ -162,7 +223,7 @@ func NewPortRegistry(asic *Asic, portConfigs []*portConfig, portGroups []*portGr
 	return pr
 }
 
-func ExpandPortSpec(spec string) ([]*PortSpec, error) {
+func expandPortSpec(spec string) ([]*PortSpec, error) {
 	trimmedSpec := strings.TrimSpace(spec)
 	if !strings.Contains(trimmedSpec, "/") {
 		return nil, fmt.Errorf("spec %s is invalid: expected cage/lane format", spec)

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	horus_pb "github.com/horus-scheduler/horus_controller/protobuf"
 	"github.com/sirupsen/logrus"
 )
 
@@ -29,6 +30,19 @@ func NewAsic(cfg *asicConfig, portConfigs []*portConfig, portGroups []*portGroup
 		CtrlAPI:     cfg.CtrlAPI,
 	}
 	asic.PortRegistry = NewPortRegistry(asic, portConfigs, portGroups)
+	return asic
+}
+
+func NewAsicFromInfo(asicInfo *horus_pb.AsicInfo, portConfigs []*horus_pb.PortConfigInfo) *Asic {
+	asic := &Asic{
+		ID:          asicInfo.ID,
+		Program:     asicInfo.Program,
+		DeviceID:    uint(asicInfo.DeviceID),
+		PipeID:      uint(asicInfo.PipeID),
+		CtrlAddress: asicInfo.CtrlAddress,
+		CtrlAPI:     asicInfo.CtrlAPI,
+	}
+	asic.PortRegistry = NewPortRegistryFromInfo(asic, asicInfo, portConfigs)
 	return asic
 }
 

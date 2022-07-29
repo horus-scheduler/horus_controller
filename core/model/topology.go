@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -11,19 +12,48 @@ import (
 
 type Topology struct {
 	sync.RWMutex
-	Root    *Node
-	Servers *NodeMap
-	Leaves  *NodeMap
-	Spines  *NodeMap
-	Cores   *NodeMap
+	Root         *Node
+	Clients      *NodeMap
+	Servers      *NodeMap
+	Leaves       *NodeMap
+	Spines       *NodeMap
+	Cores        *NodeMap
+	AsicRegistry *AsicRegistry
 }
 
-func NewDCNFromConf(topoCfg *topoRootConfig) *Topology {
+func (s *Topology) FindPort(asicStr string, portSpecStr string) (*Port, error) {
+	asic, asicFound := s.AsicRegistry.AsicMap.Load(asicStr)
+	if asicFound {
+		port, portFound := asic.PortRegistry.PortMap.Load(portSpecStr)
+		if portFound {
+			return port, nil
+		}
+		return nil, fmt.Errorf("ASIC %s has no port %s", asicStr, portSpecStr)
+	}
+	return nil, fmt.Errorf("ASIC %s doesn't exist", asicStr)
+}
+
+func NewDCNFromConf(topoRootCfg *topoRootConfig) *Topology {
+	topoCfg := topoRootCfg.TopoConf
+	asicConfigs := topoRootCfg.AsicConf.Asics
+	portConfigs := topoRootCfg.PortConf.PortConfig
+	portGroups := topoRootCfg.PortConf.PortGroup
 	s := &Topology{
-		Servers: NewNodeMap(),
-		Leaves:  NewNodeMap(),
-		Spines:  NewNodeMap(),
-		Cores:   NewNodeMap(),
+		Servers:      NewNodeMap(),
+		Leaves:       NewNodeMap(),
+		Spines:       NewNodeMap(),
+		Cores:        NewNodeMap(),
+		Clients:      NewNodeMap(),
+		AsicRegistry: NewAsicRegistry(asicConfigs, portConfigs, portGroups),
+	}
+
+	for _, clientConf := range topoCfg.Clients {
+		if port, err := s.FindPort(clientConf.Asic, clientConf.Port); err == nil {
+			client := NewClient(clientConf.ID, port)
+			s.Clients.Store(client.ID, client)
+		} else {
+			logrus.Fatalf("client %d has no port: %s", clientConf.ID, err.Error())
+		}
 	}
 
 	s.Root = NewNode("", "", 0, 0, NodeType_Core)
@@ -31,7 +61,7 @@ func NewDCNFromConf(topoCfg *topoRootConfig) *Topology {
 	s.Cores.Store(s.Root.ID, s.Root)
 
 	for _, spineConf := range topoCfg.Spines {
-		spine := NewNode(spineConf.Address, "", spineConf.ID, 0, NodeType_Spine)
+		spine := NewSpine(spineConf.Address, spineConf.ID)
 		spine.Parent = s.Root
 		s.Root.Children = append(s.Root.Children, spine)
 		s.Spines.Store(spine.ID, spine)
@@ -41,14 +71,25 @@ func NewDCNFromConf(topoCfg *topoRootConfig) *Topology {
 			var workerID uint16 = 0
 			leafConf := topoCfg.Leaves[leafID]
 			// Parham modified the line below pass PortID for leaf
-			leaf := NewNode(leafConf.Address, leafConf.MgmtAddress, leafConf.ID, leafConf.PortID, NodeType_Leaf)
+			// leaf := NewNode(leafConf.Address, leafConf.MgmtAddress, leafConf.ID, leafConf.PortID, NodeType_Leaf)
+			dsPort, err1 := s.FindPort(leafConf.Asic, leafConf.DsPort)
+			usPort, err2 := s.FindPort(leafConf.Asic, leafConf.UsPort)
+			if err1 != nil || err2 != nil {
+				logrus.Fatal(err1, err2)
+			}
+			leaf := NewLeaf(leafConf.Address, leafConf.MgmtAddress, leafConf.ID, dsPort, usPort)
 			leaf.Index = leafConf.Index
 			leaf.Parent = spine
 			spine.Children = append(spine.Children, leaf)
 			leaf.FirstWorkerID = workerID
 			for _, serverID := range leafConf.ServerIDs {
 				serverConf := topoCfg.Servers[serverID]
-				server := NewNode(serverConf.Address, "", serverConf.ID, serverConf.PortID, NodeType_Server)
+				// server := NewNode(serverConf.Address, "", serverConf.ID, serverConf.PortID, NodeType_Server)
+				port, err := s.FindPort(leafConf.Asic, serverConf.Port)
+				if err != nil {
+					logrus.Fatal(err)
+				}
+				server := NewServer(serverConf.Address, serverConf.ID, port)
 				server.Parent = leaf
 				leaf.Children = append(leaf.Children, server)
 				// Set worker IDs per Server
@@ -75,8 +116,9 @@ func NewDCNFromTopoInfo(topoInfo *horus_pb.TopoInfo) *Topology {
 		Leaves:  NewNodeMap(),
 		Spines:  NewNodeMap(),
 		Cores:   NewNodeMap(),
+		Clients: NewNodeMap(),
 	}
-
+	// Implement the AsicRegistry
 	s.Root = NewNode("", "", 0, 0, NodeType_Core)
 	s.Root.Parent = nil
 	s.Cores.Store(s.Root.ID, s.Root)
@@ -221,29 +263,13 @@ func (s *Topology) GetNode(nodeId uint16, nodeType NodeType) *Node {
 		nodes = s.Leaves
 	} else if nodeType == NodeType_Spine {
 		nodes = s.Spines
+	} else if nodeType == NodeType_Client {
+		nodes = s.Clients
 	}
 
 	node, found := nodes.Load(nodeId)
 	if found {
 		return node
-	}
-	return nil
-}
-
-// Assumes that addresses are unique per Servers, Leaves, and Spines
-func (s *Topology) GetNodeByAddress(nodeAddress string, nodeType NodeType) *Node {
-	var nodes *NodeMap
-	if nodeType == NodeType_Server {
-		nodes = s.Servers
-	} else if nodeType == NodeType_Leaf {
-		nodes = s.Leaves
-	} else if nodeType == NodeType_Spine {
-		nodes = s.Spines
-	}
-	for _, n := range nodes.Internal() {
-		if n.Address == nodeAddress {
-			return n
-		}
 	}
 	return nil
 }

@@ -24,6 +24,12 @@ type portRootConfig struct {
 }
 
 type topoRootConfig struct {
+	TopoConf *topoConfig
+	PortConf *portRootConfig
+	AsicConf *asicRootConfig
+}
+
+type topoConfig struct {
 	Clients []*clientConfig
 	Spines  []*spineConfig
 	Leaves  []*leafConfig
@@ -55,6 +61,7 @@ type portGroup struct {
 type clientConfig struct {
 	ID   uint16
 	Port string
+	Asic string
 }
 
 type spineConfig struct {
@@ -123,7 +130,7 @@ func ReadTopologyFile(configName string, configPaths ...string) *topoRootConfig 
 	if err != nil {             // Handle errors reading the config file
 		log.Fatalf("Fatal error config file: %s \n", err)
 	}
-	topCfg := &topoRootConfig{}
+	topCfg := &topoConfig{}
 	asicsCfg := &asicRootConfig{}
 	portCfg := &portRootConfig{}
 
@@ -142,12 +149,8 @@ func ReadTopologyFile(configName string, configPaths ...string) *topoRootConfig 
 		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
-	ar := NewAsicRegistry(asicsCfg.Asics, portCfg.PortConfig, portCfg.PortGroup)
-	logrus.Info(ar)
-	logrus.Info(topCfg.Leaves[0])
-	logrus.Fatal("X")
 
-	return topCfg
+	return &topoRootConfig{TopoConf: topCfg, PortConf: portCfg, AsicConf: asicsCfg}
 }
 
 func ReadVCsFile(configName string, configPaths ...string) *vcRootConfig {

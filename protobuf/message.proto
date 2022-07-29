@@ -23,15 +23,51 @@ message VCServerInfo {
     repeated uint32 workersIDs = 2;
 }
 
+message PortConfigInfo {
+    string ID = 1;  
+	string Speed = 2;
+	string Fec = 3;
+	string An = 4;
+}
+
+message PortInfo  {
+    string ID = 1;
+    uint32 Cage = 2;
+    uint32 Lane = 3;
+	uint64 DevPort = 4;
+    PortConfigInfo PortConfig = 5;
+}
+
+message AsicInfo {
+	string ID = 1;        
+	string Program = 2;      
+	uint32 DeviceID = 3 ;
+	uint32 PipeID = 4;
+	string CtrlAddress = 5;
+	string CtrlAPI = 6;
+	repeated PortInfo portsInfo = 7;
+}
+
 message TopoInfo {
     repeated SpineInfo spines = 1;
+    repeated ClientInfo clients = 2;
+    repeated AsicInfo asics = 3;
+    repeated PortConfigInfo portConfig = 4;
+}
+
+message ClientInfo {
+    uint32 id = 1;
+    string address = 2;
+    AsicInfo asic = 3;
+    PortInfo port = 4;
 }
 
 message SpineInfo {
     uint32 id = 1;
     string address = 2;
     repeated LeafInfo leaves = 3;
-    uint32 pipeID = 4;
+    AsicInfo asic = 4;
+    uint32 pipeID = 5;
 }
 
 message LeafInfo {
@@ -39,19 +75,23 @@ message LeafInfo {
     uint32 id = 1;
     uint32 index = 2;
     string address = 3;
-    uint32 port_id = 4;
+    string mgmtAddress = 4;
     repeated ServerInfo servers = 5;
     uint32 spineID = 6;
-    string mgmtAddress = 7;
-    uint32 pipeID = 8;
+    AsicInfo asic = 7;
+    PortInfo dsPort = 8;
+    PortInfo usPort = 9;
+    uint32 port_id = 10;
+    uint32 pipeID = 11;
 }
 
 message ServerInfo {
     uint32 id = 1;
-    uint32 port_id = 2;
-    string address = 3;
-    uint32 workers_count = 4;
-    uint32 leafID = 5;
+    string address = 2;
+    uint32 workers_count = 3;
+    uint32 leafID = 4;
+    PortInfo port = 5;
+    uint32 port_id = 6;
 }
 
 service HorusService {
