@@ -1,3 +1,14 @@
+# All the available ASICs in the DC
+[asics]
+    [[asics.asic]]
+        id = "tofino"
+        program = "saqr"
+        deviceId = 0
+        pipeId = 65535
+        ctrlAddress = "0.0.0.0:50052"
+        # Options: "fake" | "bfrt"
+        ctrlAPI = "fake"
+
 [ports]
     # IMPORTNT NOTES: 
     # 1. This works by specifying common port configs, each has a unique ID.
@@ -25,11 +36,13 @@
         an = "AUTO"
         
     [[ports.group]]
+        asic = "tofino"
         specs = ["1/-", "2/-", "3/-", 
                  "4/-", "9/-"]
         config = "10G"
     
     [[ports.group]]
+        asic = "tofino"
         specs = ["19/0", "20/0", "21/0", "22/0", 
                  "23/0", "24/0", "25/0", "26/0", 
                  "27/0", "28/0", "29/0", "30/0"]
@@ -44,47 +57,60 @@
         id = 100
         address = "0.0.0.0:5001"
         leaves = [0, 1, 2, 3]
+        asic = "tofino"
 
     [[topology.leaves]]
+        # horus-specific values
         id = 0
         index = 0
         address = "0.0.0.0:6001"
+        mgmtAddress = "0.0.0.0:7001"
+        servers = [0] # order matters
+        # switch-specific values
+        asic = "tofino"
         port_id = 36
         us_port = "1/0" # from leaf->spine
         ds_port = "2/0" # from spine->leaf
-        mgmtAddress = "0.0.0.0:7001"
-        servers = [0] # order matters
 
     [[topology.leaves]]
+        # horus-specific values
         id = 1
         index = 1
         address = "0.0.0.0:6002"
+        mgmtAddress = "0.0.0.0:7001"
+        servers = [1] # order matters
+        # switch-specific values
+        asic = "tofino"
         port_id = 44
         us_port = "" # from leaf->spine
         ds_port = "" # from spine->leaf
-        mgmtAddress = "0.0.0.0:7001"
-        servers = [1] # order matters
-
+        
     [[topology.leaves]]
+        # horus-specific values
         id = 2
         index = 2
         address = "0.0.0.0:6003"
+        mgmtAddress = "0.0.0.0:7001"
+        servers = [2] # order matters
+        # switch-specific values
+        asic = "tofino"
         port_id = 20
         us_port = "" # from leaf->spine
         ds_port = "" # from spine->leaf
-        mgmtAddress = "0.0.0.0:7001"
-        servers = [2] # order matters
 
     [[topology.leaves]]
+        # horus-specific values
         id = 3
         index = 3
         address = "0.0.0.0:6004"
+        mgmtAddress = "0.0.0.0:7001"
+        servers = [3] # order matters
+        # switch-specific values
+        asic = "tofino"
         port_id = 52
         us_port = "" # from leaf->spine
         ds_port = "" # from spine->leaf
-        mgmtAddress = "0.0.0.0:7001"
-        servers = [3] # order matters
-     
+
     #cs-nsl-55
     [[topology.servers]]
         id = 0

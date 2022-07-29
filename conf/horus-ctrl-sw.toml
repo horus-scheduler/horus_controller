@@ -10,17 +10,17 @@ level = "debug"
     intf = "bf_pci0"
     program = "saqr"
     device_id = 0
-    # pipe_id = 65535
+    pipe_id = 65535
+
+# used by BfRt clients
+[bfrt]
+    address = "0.0.0.0:50052"
 
 # used by spine and/or leaf switches
 [centralized]
     srvAddress = "0.0.0.0:4001"
 
-# used by spine and leaf switches
-[bfrt]
-    address = "0.0.0.0:50052"
-
-# specifies the leaf & spine controllers managed by this specific "switch controller"
+# specifies the leaf & spine controllers managed by this specific "switch manager"
 [controllers]
     mgmtAddress = "0.0.0.0:7001"
     timeout = 1000 # in milliseconds

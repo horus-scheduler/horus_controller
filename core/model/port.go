@@ -47,10 +47,11 @@ type Port struct {
 	Spec    *PortSpec
 	DevPort uint64
 	Config  *PortConfig
+	Asic    *Asic
 }
 
 func (p *Port) String() string {
-	return fmt.Sprintf("%s, DevPort=%d (%s)", p.Spec, p.DevPort, p.Config)
+	return fmt.Sprintf("\t\t%s, DevPort=%d (%s)", p.Spec, p.DevPort, p.Config)
 }
 
 type PortSpec struct {
@@ -93,11 +94,12 @@ func NewPortSpec(cage uint64, lane uint64) *PortSpec {
 	}
 }
 
-func NewPort(spec *PortSpec, devPort uint64, config *PortConfig) *Port {
+func NewPort(asic *Asic, spec *PortSpec, devPort uint64, config *PortConfig) *Port {
 	return &Port{
 		Spec:    spec,
 		DevPort: devPort,
 		Config:  config,
+		Asic:    asic,
 	}
 }
 
@@ -114,7 +116,7 @@ func (pr *PortRegistry) String() string {
 	return strings.Join(lines, "\n")
 }
 
-func NewPortRegistry(portConfigs []*portConfig, portGroups []*portGroup) *PortRegistry {
+func NewPortRegistry(asic *Asic, portConfigs []*portConfig, portGroups []*portGroup) *PortRegistry {
 	pr := &PortRegistry{
 		ConfigMap: NewPortConfigMap(),
 		PortMap:   NewPortMap(),
@@ -147,7 +149,7 @@ func NewPortRegistry(portConfigs []*portConfig, portGroups []*portGroup) *PortRe
 			for _, spec := range allSpecs {
 				_, found := pr.PortMap.Load(spec.ID)
 				if !found {
-					port := NewPort(spec, 0, portCfg)
+					port := NewPort(asic, spec, 0, portCfg)
 					pr.PortMap.Store(port.Spec.ID, port)
 				} else {
 					logrus.Warnf("PortSpec with ID=%s exists. Ignoring the new one.", spec.ID)

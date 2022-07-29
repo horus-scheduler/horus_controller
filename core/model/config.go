@@ -14,6 +14,10 @@ type BinRootConfig struct {
 	LogLevel string
 }
 
+type asicRootConfig struct {
+	Asics []*asicConfig `mapstructure:"asic"`
+}
+
 type portRootConfig struct {
 	PortConfig []*portConfig `mapstructure:"config"`
 	PortGroup  []*portGroup  `mapstructure:"group"`
@@ -33,9 +37,19 @@ type portConfig struct {
 	An    string
 }
 
+type asicConfig struct {
+	ID          string
+	Program     string
+	DeviceID    uint   `mapstructure:"deviceId"`
+	PipeID      uint   `mapstructure:"pipeId"`
+	CtrlAddress string `mapstructure:"ctrlAddress"`
+	CtrlAPI     string `mapstructure:"ctrlAPI"`
+}
+
 type portGroup struct {
 	Specs  []string
 	Config string
+	Asic   string
 }
 
 type clientConfig struct {
@@ -47,6 +61,7 @@ type spineConfig struct {
 	ID      uint16
 	Address string
 	LeafIDs []uint16 `mapstructure:"leaves"`
+	Asic    string
 }
 
 // Parham: Please check, added PortID
@@ -54,11 +69,12 @@ type leafConfig struct {
 	ID          uint16
 	Index       uint16
 	Address     string
-	PortID      uint16   `mapstructure:"port_id"`
-	UsPort      string   `mapstructure:"us_port"`
-	DsPort      string   `mapstructure:"ds_port"`
 	MgmtAddress string   `mapstructure:"mgmtAddress"`
 	ServerIDs   []uint16 `mapstructure:"servers"`
+	Asic        string
+	PortID      uint16 `mapstructure:"port_id"`
+	UsPort      string `mapstructure:"us_port"`
+	DsPort      string `mapstructure:"ds_port"`
 }
 
 type serverConfig struct {
@@ -108,6 +124,7 @@ func ReadTopologyFile(configName string, configPaths ...string) *topoRootConfig 
 		log.Fatalf("Fatal error config file: %s \n", err)
 	}
 	topCfg := &topoRootConfig{}
+	asicsCfg := &asicRootConfig{}
 	portCfg := &portRootConfig{}
 
 	err = viper.UnmarshalKey("topology", &topCfg)
@@ -120,9 +137,14 @@ func ReadTopologyFile(configName string, configPaths ...string) *topoRootConfig 
 		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
-
-	pr := NewPortRegistry(portCfg.PortConfig, portCfg.PortGroup)
-	logrus.Info(pr.String())
+	err = viper.UnmarshalKey("asics", &asicsCfg)
+	if err != nil {
+		logrus.Errorf("unable to decode into struct, %v", err)
+		err = nil
+	}
+	ar := NewAsicRegistry(asicsCfg.Asics, portCfg.PortConfig, portCfg.PortGroup)
+	logrus.Info(ar)
+	logrus.Info(topCfg.Leaves[0])
 	logrus.Fatal("X")
 
 	return topCfg
