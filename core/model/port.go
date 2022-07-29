@@ -188,6 +188,9 @@ func ExpandPortSpec(spec string) ([]*PortSpec, error) {
 	if err != nil {
 		return nil, fmt.Errorf("spec %s is invalid: %s", spec, err.Error())
 	}
+	if lane < 0 || lane > 3 {
+		return nil, fmt.Errorf("spec %s is invalid: 0 <= lane <= 3", spec)
+	}
 	return []*PortSpec{NewPortSpec(uint64(cage), uint64(lane))}, nil
 }
 
