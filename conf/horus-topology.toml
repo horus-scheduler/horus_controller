@@ -50,8 +50,8 @@
         index = 0
         address = "0.0.0.0:6001"
         port_id = 36
-        us_port = "" # from leaf->spine
-        ds_port = "" # from spine->leaf
+        us_port = "1/0" # from leaf->spine
+        ds_port = "2/0" # from spine->leaf
         mgmtAddress = "0.0.0.0:7001"
         servers = [0] # order matters
 
@@ -89,7 +89,7 @@
     [[topology.servers]]
         id = 0
         port_id = 132
-        port = "" # server<->leaf
+        port = "1/0" # server<->leaf
         address = "F8:F2:1E:3A:13:EC"
         workers_count = 8
 

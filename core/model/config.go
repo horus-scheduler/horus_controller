@@ -14,10 +14,33 @@ type BinRootConfig struct {
 	LogLevel string
 }
 
+type portRootConfig struct {
+	PortConfig []*portConfig `mapstructure:"config"`
+	PortGroup  []*portGroup  `mapstructure:"group"`
+}
+
 type topoRootConfig struct {
+	Clients []*clientConfig
 	Spines  []*spineConfig
 	Leaves  []*leafConfig
 	Servers []*serverConfig
+}
+
+type portConfig struct {
+	ID    string
+	Speed string
+	Fec   string
+	An    string
+}
+
+type portGroup struct {
+	Specs  []string
+	Config string
+}
+
+type clientConfig struct {
+	ID   uint16
+	Port string
 }
 
 type spineConfig struct {
@@ -32,6 +55,8 @@ type leafConfig struct {
 	Index       uint16
 	Address     string
 	PortID      uint16   `mapstructure:"port_id"`
+	UsPort      string   `mapstructure:"us_port"`
+	DsPort      string   `mapstructure:"ds_port"`
 	MgmtAddress string   `mapstructure:"mgmtAddress"`
 	ServerIDs   []uint16 `mapstructure:"servers"`
 }
@@ -39,6 +64,7 @@ type leafConfig struct {
 type serverConfig struct {
 	ID           uint16
 	PortID       uint16 `mapstructure:"port_id"`
+	Port         string `mapstructure:"port"`
 	Address      string
 	WorkersCount uint16 `mapstructure:"workers_count"`
 }
@@ -81,15 +107,25 @@ func ReadTopologyFile(configName string, configPaths ...string) *topoRootConfig 
 	if err != nil {             // Handle errors reading the config file
 		log.Fatalf("Fatal error config file: %s \n", err)
 	}
-	cfg := &topoRootConfig{}
+	topCfg := &topoRootConfig{}
+	portCfg := &portRootConfig{}
 
-	err = viper.UnmarshalKey("topology", &cfg)
+	err = viper.UnmarshalKey("topology", &topCfg)
+	if err != nil {
+		logrus.Errorf("unable to decode into struct, %v", err)
+		err = nil
+	}
+	err = viper.UnmarshalKey("ports", &portCfg)
 	if err != nil {
 		logrus.Errorf("unable to decode into struct, %v", err)
 		err = nil
 	}
 
-	return cfg
+	pr := NewPortRegistry(portCfg.PortConfig, portCfg.PortGroup)
+	logrus.Info(pr.String())
+	logrus.Fatal("X")
+
+	return topCfg
 }
 
 func ReadVCsFile(configName string, configPaths ...string) *vcRootConfig {
