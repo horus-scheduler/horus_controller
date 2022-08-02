@@ -13,14 +13,17 @@ var WorkerQlenUnitMap = map[uint16]uint16{ // assuming 3bit showing fraction and
 
 // Used by leaf when forwarding Horus signal pkts to spine (key 100)
 // or sending back replies (send to spine and then spine sends to client)
-var UpstreamPortMap = map[uint16]uint16{
-	100: 152,
-	110: 144,
-	111: 160,
-}
+// var LeafUpstreamPortMap = map[uint16]uint16{
+// 	0: 152, // 30/0
+// 	1: 144, // 29/0
+// 	2: 160, // 28/0
+// 	3: 168, // 27/0
+// }
+
+// var UpstreamIDs = [3]int{100, 110, 120} // Spine ID 100 and client IDs 110, 120
 
 // Used by spine when forwarding the task result to client machines
-var ClientPortMap = map[uint16]uint16{
-	110: 56,
-	111: 58,
-}
+// var ClientPortMap = map[uint16]uint16{
+// 	110: 56, // 9/0
+// 	111: 58, //
+// }
