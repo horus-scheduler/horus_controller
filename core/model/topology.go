@@ -22,13 +22,20 @@ type Topology struct {
 }
 
 func (s *Topology) FindPort(asicStr string, portSpecStr string) (*Port, error) {
-	asic, asicFound := s.AsicRegistry.AsicMap.Load(asicStr)
-	if asicFound {
-		port, portFound := asic.PortRegistry.PortMap.Load(portSpecStr)
-		if portFound {
-			return port, nil
-		}
-		return nil, fmt.Errorf("ASIC %s has no port %s", asicStr, portSpecStr)
+	asic, err := s.FindAsic(asicStr)
+	if err != nil {
+		return nil, err
+	}
+	port, portFound := asic.PortRegistry.PortMap.Load(portSpecStr)
+	if portFound {
+		return port, nil
+	}
+	return nil, fmt.Errorf("ASIC %s has no port %s", asicStr, portSpecStr)
+}
+
+func (s *Topology) FindAsic(asicStr string) (*Asic, error) {
+	if asic, asicFound := s.AsicRegistry.AsicMap.Load(asicStr); asicFound {
+		return asic, nil
 	}
 	return nil, fmt.Errorf("ASIC %s doesn't exist", asicStr)
 }
@@ -61,7 +68,11 @@ func NewDCNFromConf(topoRootCfg *topoRootConfig) *Topology {
 	s.Cores.Store(s.Root.ID, s.Root)
 
 	for _, spineConf := range topoCfg.Spines {
-		spine := NewSpine(spineConf.Address, spineConf.ID)
+		asic, err := s.FindAsic(spineConf.Asic)
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		spine := NewSpine(spineConf.Address, spineConf.ID, asic)
 		spine.Parent = s.Root
 		s.Root.Children = append(s.Root.Children, spine)
 		s.Spines.Store(spine.ID, spine)
@@ -71,7 +82,6 @@ func NewDCNFromConf(topoRootCfg *topoRootConfig) *Topology {
 			var workerID uint16 = 0
 			leafConf := topoCfg.Leaves[leafID]
 			// Parham modified the line below pass PortID for leaf
-			// leaf := NewNode(leafConf.Address, leafConf.MgmtAddress, leafConf.ID, leafConf.PortID, NodeType_Leaf)
 			dsPort, err1 := s.FindPort(leafConf.Asic, leafConf.DsPort)
 			usPort, err2 := s.FindPort(leafConf.Asic, leafConf.UsPort)
 			if err1 != nil || err2 != nil {
@@ -84,7 +94,6 @@ func NewDCNFromConf(topoRootCfg *topoRootConfig) *Topology {
 			leaf.FirstWorkerID = workerID
 			for _, serverID := range leafConf.ServerIDs {
 				serverConf := topoCfg.Servers[serverID]
-				// server := NewNode(serverConf.Address, "", serverConf.ID, serverConf.PortID, NodeType_Server)
 				port, err := s.FindPort(leafConf.Asic, serverConf.Port)
 				if err != nil {
 					logrus.Fatal(err)
@@ -118,13 +127,31 @@ func NewDCNFromTopoInfo(topoInfo *horus_pb.TopoInfo) *Topology {
 		Cores:   NewNodeMap(),
 		Clients: NewNodeMap(),
 	}
-	// Implement the AsicRegistry
+
+	s.AsicRegistry = NewAsicRegistryFromInfo(topoInfo.Asics, topoInfo.PortConfig)
+
+	for _, clientConf := range topoInfo.Clients {
+		cPort := clientConf.Port.ID
+		cAsic := clientConf.Asic.ID
+		logrus.Info(cPort, cAsic)
+		if port, err := s.FindPort(cAsic, cPort); err == nil {
+			client := NewClient(uint16(clientConf.Id), port)
+			s.Clients.Store(client.ID, client)
+		} else {
+			logrus.Fatalf("client %d has no port: %s", clientConf.Id, err.Error())
+		}
+	}
+
 	s.Root = NewNode("", "", 0, 0, NodeType_Core)
 	s.Root.Parent = nil
 	s.Cores.Store(s.Root.ID, s.Root)
 
 	for _, spineInfo := range topoInfo.Spines {
-		spine := NewNode(spineInfo.Address, "", uint16(spineInfo.Id), 0, NodeType_Spine)
+		asic, err := s.FindAsic(spineInfo.Asic.ID)
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		spine := NewSpine(spineInfo.Address, uint16(spineInfo.Id), asic)
 		spine.Parent = s.Root
 		s.Root.Children = append(s.Root.Children, spine)
 		s.Spines.Store(spine.ID, spine)
@@ -133,16 +160,25 @@ func NewDCNFromTopoInfo(topoInfo *horus_pb.TopoInfo) *Topology {
 			// workerIDs are local per leaf
 			var workerID uint16 = 0
 			// Parham: Modified the line below, passing PortId
-			leaf := NewNode(leafInfo.Address, leafInfo.MgmtAddress, uint16(leafInfo.Id), uint16(leafInfo.PortId), NodeType_Leaf)
+			lAsic := leafInfo.Asic.ID
+			dsPort, err1 := s.FindPort(lAsic, leafInfo.DsPort.ID)
+			usPort, err2 := s.FindPort(lAsic, leafInfo.UsPort.ID)
+			if err1 != nil || err2 != nil {
+				logrus.Fatal(err1, err2)
+			}
+			leaf := NewLeaf(leafInfo.Address, leafInfo.MgmtAddress,
+				uint16(leafInfo.Id), dsPort, usPort)
 			leaf.Index = uint16(leafInfo.Index)
 			leaf.Parent = spine
 			spine.Children = append(spine.Children, leaf)
 			leaf.FirstWorkerID = workerID
 			for _, serverInfo := range leafInfo.Servers {
-				server := NewNode(serverInfo.Address, "",
-					uint16(serverInfo.Id),
-					uint16(serverInfo.PortId),
-					NodeType_Server)
+				port, err := s.FindPort(lAsic, serverInfo.Port.ID)
+				if err != nil {
+					logrus.Fatal(err)
+				}
+				server := NewServer(serverInfo.Address,
+					uint16(serverInfo.Id), port)
 				server.Parent = leaf
 				leaf.Children = append(leaf.Children, server)
 				// Set worker IDs per Server
@@ -163,26 +199,78 @@ func NewDCNFromTopoInfo(topoInfo *horus_pb.TopoInfo) *Topology {
 	return s
 }
 
+func getAsicInfo(asicID string, asicsInfo []*horus_pb.AsicInfo) *horus_pb.AsicInfo {
+	for _, asicInfo := range asicsInfo {
+		if asicInfo.ID == asicID {
+			return asicInfo
+		}
+	}
+	return nil
+}
+
+func getPortInfo(asicID string,
+	portID string,
+	asicsInfo []*horus_pb.AsicInfo) *horus_pb.PortInfo {
+	for _, asicInfo := range asicsInfo {
+		if asicInfo.ID == asicID {
+			for _, portInfo := range asicInfo.PortsInfo {
+				if portInfo.ID == portID {
+					return portInfo
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Topology) getClientInfo(topoInfo *horus_pb.TopoInfo) []*horus_pb.ClientInfo {
+	var clientsInfo []*horus_pb.ClientInfo
+	for _, client := range s.Clients.Internal() {
+		clientInfo := &horus_pb.ClientInfo{}
+		asicID := client.Port.Asic.ID
+		portID := client.Port.Spec.ID
+		clientInfo.Id = uint32(client.ID)
+		clientInfo.Address = client.Address
+		clientInfo.Asic = getAsicInfo(asicID, topoInfo.Asics)
+		clientInfo.Port = getPortInfo(asicID, portID, topoInfo.Asics)
+		clientsInfo = append(clientsInfo, clientInfo)
+	}
+	return clientsInfo
+}
+
 func (s *Topology) EncodeToTopoInfo() *horus_pb.TopoInfo {
 	topoInfo := &horus_pb.TopoInfo{}
+	topoInfo.Asics = s.AsicRegistry.EncodeToAsicInfo()
+	topoInfo.PortConfig = s.AsicRegistry.EncodeToPortConfigInfo()
+	topoInfo.Clients = s.getClientInfo(topoInfo)
+
 	for _, spine := range s.Spines.Internal() {
 		spineInfo := &horus_pb.SpineInfo{Id: uint32(spine.ID), Address: spine.Address}
+		spineInfo.Asic = getAsicInfo(spine.Asic.ID, topoInfo.Asics)
 		topoInfo.Spines = append(topoInfo.Spines, spineInfo)
 		spine.RLock()
 		for _, leaf := range spine.Children {
 			leafInfo := &horus_pb.LeafInfo{}
 			leaf.RLock()
+			asicID := leaf.DsPort.Asic.ID
+			dsPortID := leaf.DsPort.Spec.ID
+			usPortID := leaf.UsPort.Spec.ID
 			leafInfo.Id = uint32(leaf.ID)
 			leafInfo.Index = uint32(leaf.Index)
 			leafInfo.Address = leaf.Address
+			leafInfo.Asic = getAsicInfo(asicID, topoInfo.Asics)
+			leafInfo.DsPort = getPortInfo(asicID, dsPortID, topoInfo.Asics)
+			leafInfo.UsPort = getPortInfo(asicID, usPortID, topoInfo.Asics)
 			leafInfo.PortId = uint32(leaf.PortId) // Parham: Added this line, please check correctness
 			leafInfo.MgmtAddress = leaf.MgmtAddress
 			leafInfo.SpineID = uint32(spine.ID)
 			for _, server := range leaf.Children {
 				serverInfo := &horus_pb.ServerInfo{}
 				server.RLock()
+				portID := server.Port.Spec.ID
 				serverInfo.Id = uint32(server.ID)
 				serverInfo.Address = server.Address
+				serverInfo.Port = getPortInfo(asicID, portID, topoInfo.Asics)
 				serverInfo.PortId = uint32(server.PortId)
 				var workersCount uint16 = 0
 				if server.LastWorkerID > server.FirstWorkerID {
@@ -201,7 +289,13 @@ func (s *Topology) EncodeToTopoInfo() *horus_pb.TopoInfo {
 }
 
 func (s *Topology) EncodeToTopoInfoAtLeaf(leafInfo *horus_pb.LeafInfo) *horus_pb.TopoInfo {
+	// Encode clients
+	// Encode ports
 	topoInfo := &horus_pb.TopoInfo{}
+	topoInfo.Asics = s.AsicRegistry.EncodeToAsicInfo()
+	topoInfo.PortConfig = s.AsicRegistry.EncodeToPortConfigInfo()
+	topoInfo.Clients = s.getClientInfo(topoInfo)
+
 	leaf := s.GetNode(uint16(leafInfo.Id), NodeType_Leaf)
 	if leaf == nil {
 		return nil
@@ -212,6 +306,7 @@ func (s *Topology) EncodeToTopoInfoAtLeaf(leafInfo *horus_pb.LeafInfo) *horus_pb
 
 	spine := s.GetNode(leaf.Parent.ID, NodeType_Spine)
 	spineInfo := &horus_pb.SpineInfo{Id: uint32(spine.ID), Address: spine.Address}
+	spineInfo.Asic = getAsicInfo(spine.Asic.ID, topoInfo.Asics)
 	topoInfo.Spines = append(topoInfo.Spines, spineInfo)
 
 	retLeafInfo := &horus_pb.LeafInfo{}
@@ -221,16 +316,26 @@ func (s *Topology) EncodeToTopoInfoAtLeaf(leafInfo *horus_pb.LeafInfo) *horus_pb
 	spine.RUnlock()
 
 	leaf.RLock()
+	asicID := leaf.DsPort.Asic.ID
+	dsPortID := leaf.DsPort.Spec.ID
+	usPortID := leaf.UsPort.Spec.ID
+
 	retLeafInfo.Id = uint32(leaf.ID)
 	retLeafInfo.Index = uint32(leaf.Index)
 	retLeafInfo.Address = leaf.Address
 	retLeafInfo.PortId = uint32(leaf.PortId) // Parham: added this line, please check
 	retLeafInfo.MgmtAddress = leaf.MgmtAddress
+	retLeafInfo.Asic = getAsicInfo(asicID, topoInfo.Asics)
+	retLeafInfo.DsPort = getPortInfo(asicID, dsPortID, topoInfo.Asics)
+	retLeafInfo.UsPort = getPortInfo(asicID, usPortID, topoInfo.Asics)
+
 	for _, server := range leaf.Children {
 		serverInfo := &horus_pb.ServerInfo{}
 		server.RLock()
+		portID := server.Port.Spec.ID
 		serverInfo.Id = uint32(server.ID)
 		serverInfo.Address = server.Address
+		serverInfo.Port = getPortInfo(asicID, portID, topoInfo.Asics)
 		serverInfo.PortId = uint32(server.PortId)
 		var workersCount uint16 = 0
 		if server.LastWorkerID > server.FirstWorkerID {
@@ -305,7 +410,13 @@ func (s *Topology) AddLeafToSpine(leafInfo *horus_pb.LeafInfo) (*Node, error) {
 
 	// All checks passed.
 	// Parham: modified the line below, passing PortId from protofbuf to Node.
-	leaf = NewNode(leafInfo.Address, leafInfo.MgmtAddress, leafID, uint16(leafInfo.PortId), NodeType_Leaf)
+	asicStr := leafInfo.Asic.ID
+	dsPort, err1 := s.FindPort(asicStr, leafInfo.DsPort.ID)
+	usPort, err2 := s.FindPort(asicStr, leafInfo.UsPort.ID)
+	if err1 != nil || err2 != nil {
+		logrus.Fatal(err1, err2)
+	}
+	leaf = NewLeaf(leafInfo.Address, leafInfo.MgmtAddress, leafID, dsPort, usPort)
 	leaf.Parent = spine
 	spine.Lock()
 	spine.Children = append(spine.Children, leaf)
@@ -334,8 +445,12 @@ func (s *Topology) AddServerToLeaf(serverInfo *horus_pb.ServerInfo, leafID uint1
 	}
 	leaf.Lock()
 	defer leaf.Unlock()
-
-	server := NewNode(serverInfo.Address, "", uint16(serverInfo.Id), uint16(serverInfo.PortId), NodeType_Server)
+	asicStr := leaf.Asic.ID
+	port, err := s.FindPort(asicStr, serverInfo.Port.ID)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	server := NewServer(serverInfo.Address, uint16(serverInfo.Id), port)
 	server.Parent = leaf
 	leaf.Children = append(leaf.Children, server)
 	leaf.FirstWorkerID = 0
@@ -441,6 +556,17 @@ func (s *Topology) Debug() {
 	logrus.Debug("Spines Count=", len(s.Spines.Internal()))
 	logrus.Debug("Leaves Count=", len(s.Leaves.Internal()))
 	logrus.Debug("Servers Count=", len(s.Servers.Internal()))
+	logrus.Debug("Clients Count=", len(s.Clients.Internal()))
+
+	logrus.Debug("- Clients")
+	for _, client := range s.Clients.Internal() {
+		client.RLock()
+		logrus.Debug(
+			"-- Client: ", client.ID,
+			", Port:", client.Port.Spec.ID,
+		)
+		client.RUnlock()
+	}
 
 	// DFS
 	stack := make([]*Node, 0)
@@ -453,14 +579,23 @@ func (s *Topology) Debug() {
 		node, stack = stack[len(stack)-1], stack[:len(stack)-1]
 		node.RLock()
 		if node.Type == NodeType_Spine {
-			logrus.Debug("- Spine: ", node.ID)
+			logrus.Debug("- Spine: ", node.ID,
+				", ASIC: ", node.Asic.ID)
 		} else if node.Type == NodeType_Leaf {
 			logrus.Debug("-- Leaf: ", node.ID,
 				", Index: ", node.Index,
 				", First WID: ", node.FirstWorkerID,
-				", Last WID: ", node.LastWorkerID)
+				", Last WID: ", node.LastWorkerID,
+				", ASIC: ", node.Asic.ID,
+				", DS Port: ", node.DsPort.Spec.ID,
+				", US Port: ", node.UsPort.Spec.ID,
+			)
 		} else if node.Type == NodeType_Server {
-			logrus.Debug("--- Server: ", node.ID, ", First WID: ", node.FirstWorkerID, ", Last WID: ", node.LastWorkerID)
+			logrus.Debug("--- Server: ", node.ID,
+				", First WID: ", node.FirstWorkerID,
+				", Last WID: ", node.LastWorkerID,
+				", Port: ", node.Port.Spec.ID,
+			)
 		}
 		for i := len(node.Children) - 1; i >= 0; i-- {
 			stack = append(stack, node.Children[i])

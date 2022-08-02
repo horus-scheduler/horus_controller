@@ -25,6 +25,7 @@ type Node struct {
 	Parent      *Node
 	Children    []*Node
 
+	Asic   *Asic
 	Port   *Port // valid if type == client | server
 	DsPort *Port // valid if type == leaf
 	UsPort *Port // valid if type == leaf
@@ -41,6 +42,7 @@ type Node struct {
 func NewClient(id uint16, port *Port) *Node {
 	return &Node{
 		ID:       id,
+		Asic:     port.Asic,
 		Port:     port,
 		Type:     NodeType_Client,
 		Parent:   nil,
@@ -52,6 +54,7 @@ func NewLeaf(address, mgmtAddress string, id uint16, dsPort *Port, usPort *Port)
 	return &Node{
 		MgmtAddress: mgmtAddress,
 		ID:          id,
+		Asic:        dsPort.Asic,
 		DsPort:      dsPort,
 		UsPort:      usPort,
 		Type:        NodeType_Leaf,
@@ -64,6 +67,7 @@ func NewServer(address string, id uint16, port *Port) *Node {
 	return &Node{
 		Address:  address,
 		ID:       id,
+		Asic:     port.Asic,
 		Port:     port,
 		Type:     NodeType_Server,
 		Parent:   nil,
@@ -71,10 +75,11 @@ func NewServer(address string, id uint16, port *Port) *Node {
 	}
 }
 
-func NewSpine(address string, id uint16) *Node {
+func NewSpine(address string, id uint16, asic *Asic) *Node {
 	return &Node{
 		Address:  address,
 		ID:       id,
+		Asic:     asic,
 		Type:     NodeType_Spine,
 		Parent:   nil,
 		Children: make([]*Node, 0),

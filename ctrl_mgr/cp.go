@@ -277,7 +277,7 @@ func (cp *BfrtLeafCP_V1) Init() {
 			}
 			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
 			ks := bfrtC.MakeKeys(k1) // Parham: is this needed even for single key?
-			d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
+			d1 := bfrtC.MakeBytesData("port", uint64(server.Port.GetDevPort()))
 			d2 := bfrtC.MakeBytesData("dst_mac", mac_data)
 			ds := bfrtC.MakeData(d1, d2)
 
@@ -380,7 +380,7 @@ func (cp *BfrtLeafCP_V1) OnServerChange(hmMsg *core.LeafHealthMsg) {
 			}
 			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
 			ks := bfrtC.MakeKeys(k1)
-			d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
+			d1 := bfrtC.MakeBytesData("port", uint64(server.Port.GetDevPort()))
 			d2 := bfrtC.MakeBytesData("dst_mac", mac_data)
 			ds := bfrtC.MakeData(d1, d2)
 			err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
@@ -455,7 +455,8 @@ func (cp *BfrtSpineCP_V1) Init() {
 		// Parham: action doesn't need to start with pipe name? E.g, pipe_spine.Spineingress....
 		action := "SpineIngress.act_forward_saqr"
 		k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(leaf.ID))
-		d1 := bfrtC.MakeBytesData("port", uint64(leaf.PortId))
+		// d1 := bfrtC.MakeBytesData("port", uint64(leaf.PortId))
+		d1 := bfrtC.MakeBytesData("port", uint64(leaf.UsPort.GetDevPort()))
 		ks := bfrtC.MakeKeys(k1)
 		ds := bfrtC.MakeData(d1)
 		entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
@@ -551,20 +552,20 @@ func (cp *BfrtSpineCP_V1) Init() {
 	}
 
 	// Client port mapping
-    for key, value := range model.ClientPortMap {
-        table := "pipe_spine.SpineIngress.forward_saqr_switch_dst"
-           
-        action := "SpineIngress.act_forward_saqr"
-        k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(key))
-        d1 := bfrtC.MakeBytesData("port", uint64(value))
-        ks := bfrtC.MakeKeys(k1)
-        ds := bfrtC.MakeData(d1)
-        entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-        if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-            logrus.Errorf("[Spine] Setting up table %s failed", table)
-            logrus.Fatal(entry)
-        }
-    }
+	for key, value := range model.ClientPortMap {
+		table := "pipe_spine.SpineIngress.forward_saqr_switch_dst"
+
+		action := "SpineIngress.act_forward_saqr"
+		k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(key))
+		d1 := bfrtC.MakeBytesData("port", uint64(value))
+		ks := bfrtC.MakeKeys(k1)
+		ds := bfrtC.MakeData(d1)
+		entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Errorf("[Spine] Setting up table %s failed", table)
+			logrus.Fatal(entry)
+		}
+	}
 
 	cp.InitRandomAdjustTables()
 }

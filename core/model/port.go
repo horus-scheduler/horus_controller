@@ -10,6 +10,29 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var BfSpeedSet = map[string]string{
+	"BF_SPEED_1G":   "BF_SPEED_1G",
+	"BF_SPEED_10G":  "BF_SPEED_10G",
+	"BF_SPEED_25G":  "BF_SPEED_25G",
+	"BF_SPEED_40G":  "BF_SPEED_40G",
+	"BF_SPEED_50G":  "BF_SPEED_50G",
+	"BF_SPEED_100G": "BF_SPEED_100G",
+	"BF_SPEED_200G": "BF_SPEED_200G",
+	"BF_SPEED_400G": "BF_SPEED_400G",
+}
+
+var BfFecSet = map[string]string{
+	"BF_FEC_TYP_NONE":         "BF_FEC_TYP_NONE",
+	"BF_FEC_TYP_FIRECODE":     "BF_FEC_TYP_FIRECODE",
+	"BF_FEC_TYP_REED_SOLOMON": "BF_FEC_TYP_REED_SOLOMON",
+}
+
+var BfAnSet = map[string]string{
+	"PM_AN_DEFAULT":       "PM_AN_DEFAULT",
+	"PM_AN_FORCE_ENABLE":  "PM_AN_FORCE_ENABLE",
+	"PM_AN_FORCE_DISABLE": "PM_AN_FORCE_DISABLE",
+}
+
 var BfSpeedMap = map[string]string{
 	"1G":   "BF_SPEED_1G",
 	"10G":  "BF_SPEED_10G",
@@ -82,11 +105,24 @@ func NewPortConfig(portConfig *portConfig) (*PortConfig, error) {
 	bfFecKey := strings.ToUpper(portConfig.Fec)
 	bfAnKey := strings.ToUpper(portConfig.An)
 
-	bfSpeed, ok1 := BfSpeedMap[bfSpeedKey]
-	bfFec, ok2 := BfFecMap[bfFecKey]
-	bfAn, ok3 := BfAnMap[bfAnKey]
+	var bfSpeed, bfFec, bfAn string
+	var ok1, ok2, ok3 bool
 
-	if portConfig.ID != "" && ok1 && ok2 && ok3 {
+	// First, check whether the string can be used directly
+	bfSpeed, ok1 = BfSpeedSet[bfSpeedKey]
+	bfFec, ok2 = BfFecSet[bfFecKey]
+	bfAn, ok3 = BfAnSet[bfAnKey]
+	valid := ok1 && ok2 && ok3
+
+	if !valid {
+		// Second, check whether the string needs to be translated
+		bfSpeed, ok1 = BfSpeedMap[bfSpeedKey]
+		bfFec, ok2 = BfFecMap[bfFecKey]
+		bfAn, ok3 = BfAnMap[bfAnKey]
+		valid = ok1 && ok2 && ok3
+	}
+
+	if portConfig.ID != "" && valid {
 		return &PortConfig{
 			ID:    portConfig.ID,
 			Speed: bfSpeed,
