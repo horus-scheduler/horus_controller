@@ -96,12 +96,12 @@ func addLeaf(pool *grpcpool.Pool,
 	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	// Parham: Added attribute setting portID below
 	leafInfo := &horus_pb.LeafInfo{
-		Id:          leafID,
-		PipeID:      leafPipeID,
+		Id: leafID,
+		// PipeID:      leafPipeID,
 		SpineID:     spineID,
 		MgmtAddress: mgmtAddress,
 		Address:     address,
-		PortId:      portID,
+		// PortId:      portID,
 	}
 
 	resp, _ := client.AddLeaf(context.Background(), leafInfo)
@@ -121,8 +121,8 @@ func addServer(pool *grpcpool.Pool,
 
 	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
 	serverInfo := &horus_pb.ServerInfo{
-		Id:           serverID,
-		PortId:       portID,
+		Id: serverID,
+		// PortId:       portID,
 		Address:      address,
 		WorkersCount: workersCount,
 		LeafID:       leafId,

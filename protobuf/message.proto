@@ -67,7 +67,7 @@ message SpineInfo {
     string address = 2;
     repeated LeafInfo leaves = 3;
     AsicInfo asic = 4;
-    uint32 pipeID = 5;
+    // uint32 pipeID = 5;
 }
 
 message LeafInfo {
@@ -81,8 +81,8 @@ message LeafInfo {
     AsicInfo asic = 7;
     PortInfo dsPort = 8;
     PortInfo usPort = 9;
-    uint32 port_id = 10;
-    uint32 pipeID = 11;
+    // uint32 port_id = 10;
+    // uint32 pipeID = 11;
 }
 
 message ServerInfo {
@@ -91,7 +91,7 @@ message ServerInfo {
     uint32 workers_count = 3;
     uint32 leafID = 4;
     PortInfo port = 5;
-    uint32 port_id = 6;
+    // uint32 port_id = 6;
 }
 
 service HorusService {

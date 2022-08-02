@@ -261,7 +261,7 @@ func (s *Topology) EncodeToTopoInfo() *horus_pb.TopoInfo {
 			leafInfo.Asic = getAsicInfo(asicID, topoInfo.Asics)
 			leafInfo.DsPort = getPortInfo(asicID, dsPortID, topoInfo.Asics)
 			leafInfo.UsPort = getPortInfo(asicID, usPortID, topoInfo.Asics)
-			leafInfo.PortId = uint32(leaf.PortId) // Parham: Added this line, please check correctness
+			// leafInfo.PortId = uint32(leaf.PortId) // Parham: Added this line, please check correctness
 			leafInfo.MgmtAddress = leaf.MgmtAddress
 			leafInfo.SpineID = uint32(spine.ID)
 			for _, server := range leaf.Children {
@@ -271,7 +271,7 @@ func (s *Topology) EncodeToTopoInfo() *horus_pb.TopoInfo {
 				serverInfo.Id = uint32(server.ID)
 				serverInfo.Address = server.Address
 				serverInfo.Port = getPortInfo(asicID, portID, topoInfo.Asics)
-				serverInfo.PortId = uint32(server.PortId)
+				// serverInfo.PortId = uint32(server.PortId)
 				var workersCount uint16 = 0
 				if server.LastWorkerID > server.FirstWorkerID {
 					workersCount = server.LastWorkerID - server.FirstWorkerID + 1
@@ -323,7 +323,7 @@ func (s *Topology) EncodeToTopoInfoAtLeaf(leafInfo *horus_pb.LeafInfo) *horus_pb
 	retLeafInfo.Id = uint32(leaf.ID)
 	retLeafInfo.Index = uint32(leaf.Index)
 	retLeafInfo.Address = leaf.Address
-	retLeafInfo.PortId = uint32(leaf.PortId) // Parham: added this line, please check
+	// retLeafInfo.PortId = uint32(leaf.PortId) // Parham: added this line, please check
 	retLeafInfo.MgmtAddress = leaf.MgmtAddress
 	retLeafInfo.Asic = getAsicInfo(asicID, topoInfo.Asics)
 	retLeafInfo.DsPort = getPortInfo(asicID, dsPortID, topoInfo.Asics)
@@ -336,7 +336,7 @@ func (s *Topology) EncodeToTopoInfoAtLeaf(leafInfo *horus_pb.LeafInfo) *horus_pb
 		serverInfo.Id = uint32(server.ID)
 		serverInfo.Address = server.Address
 		serverInfo.Port = getPortInfo(asicID, portID, topoInfo.Asics)
-		serverInfo.PortId = uint32(server.PortId)
+		// serverInfo.PortId = uint32(server.PortId)
 		var workersCount uint16 = 0
 		if server.LastWorkerID > server.FirstWorkerID {
 			workersCount = server.LastWorkerID - server.FirstWorkerID + 1
