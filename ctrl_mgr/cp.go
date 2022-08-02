@@ -111,6 +111,24 @@ func LeafCPInitAllVer(ctx context.Context, leaf *model.Node, bfrtclient *bfrtC.C
 				logrus.Fatal(err.Error())
 			}
 		}
+		for uid := range model.UpstreamIDs {
+			// Table for Mirror functionality to send copy of original response packet
+			table = "$mirror.cfg"
+			action = "$normal"
+			key := uint64(uid + int(leaf.Index)) // Each emulated leaf will use a seperate port for mirror
+			k1 := bfrtC.MakeExactKey("$sid", key)
+			dstr1 := bfrtC.MakeStrData("$direction", "INGRESS")
+			// Each emulated leaf will use a seperate port for mirror
+			d2 := bfrtC.MakeBytesData("$ucast_egress_port", uint64(model.LeafUpstreamPortMap[leaf.Index]))
+			d3 := bfrtC.MakeBoolData("$ucast_egress_port_valid", true)
+			d4 := bfrtC.MakeBoolData("$session_enable", true)
+			ks := bfrtC.MakeKeys(k1)
+			ds := bfrtC.MakeData(dstr1, d2, d3, d4)
+			entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+			if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+				logrus.Fatal(entry)
+			}
+		}
 	}
 
 	// Register entry #idle workers
@@ -229,28 +247,11 @@ func ManagerInitAllVer(ctx context.Context, bfrtclient *bfrtC.Client) {
 		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
 			logrus.Fatal(entry)
 		}
-		// Table for Mirror functionality to send copy of original response packet
-		table = "$mirror.cfg"
-		action = "$normal"
-		k1 = bfrtC.MakeExactKey("$sid", uint64(key))
-		// TODO: Check correctness, data should be string "INGRESS", here we converted to uint64 to match the API
-		dstr1 := bfrtC.MakeStrData("$direction", "INGRESS")
-		d2 = bfrtC.MakeBytesData("$ucast_egress_port", uint64(value))
-		d3 := bfrtC.MakeBoolData("$ucast_egress_port_valid", true)
-		d4 := bfrtC.MakeBoolData("$session_enable", true)
-		ks = bfrtC.MakeKeys(k1)
-		ds = bfrtC.MakeData(dstr1, d2, d3, d4)
-		entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-			logrus.Fatal(entry)
-		}
+
 	}
 }
 
 func SpineCPInitAllVer(ctx context.Context, bfrtclient *bfrtC.Client, spine *model.Node) {
-	// Parham: assuming single VC for now TODO: check and fix later
-	var vcID uint64 = 0
-
 	for i, leaf := range spine.Children {
 		//leafIdx := leaf.Index
 		worker_count := uint16(0)
@@ -288,19 +289,6 @@ func SpineCPInitAllVer(ctx context.Context, bfrtclient *bfrtC.Client, spine *mod
 			logrus.Fatal(entry)
 		}
 
-		// LeafId -> qlen_unit mapping (two tables since we have two samples)
-		table = "pipe_spine.SpineIngress.set_queue_len_unit_1"
-		action = "SpineIngress.act_set_queue_len_unit_1"
-		k1 = bfrtC.MakeExactKey("saqr_md.random_id_1", uint64(leaf.ID))
-		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
-		d1 = bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
-		ks = bfrtC.MakeKeys(k1, k2)
-		ds = bfrtC.MakeData(d1)
-		entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-			logrus.Errorf("[Spine] Setting up table %s failed", table)
-			logrus.Fatal(entry)
-		}
 	}
 
 	reg := "pipe_spine.SpineIngress.idle_count"
@@ -569,14 +557,28 @@ func (cp *BfrtSpineCP_V1) Init() {
 			// Parham: Check this line seems redundant, how can we access the worker count of server
 			worker_count += server.LastWorkerID - server.FirstWorkerID + 1
 		}
-		table := "pipe_spine.SpineIngress.set_queue_len_unit_2"
-		action := "SpineIngress.act_set_queue_len_unit_2"
-		k1 := bfrtC.MakeExactKey("saqr_md.random_id_2", uint64(leaf.ID))
+		// LeafId -> qlen_unit mapping (two tables since we have two samples)
+		table := "pipe_spine.SpineIngress.set_queue_len_unit_1"
+		action := "SpineIngress.act_set_queue_len_unit_1"
+		k1 := bfrtC.MakeExactKey("saqr_md.random_id_1", uint64(leaf.ID))
 		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
 		d1 := bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
 		ks := bfrtC.MakeKeys(k1, k2)
 		ds := bfrtC.MakeData(d1)
 		entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Errorf("[Spine] Setting up table %s failed", table)
+			logrus.Fatal(entry)
+		}
+
+		table = "pipe_spine.SpineIngress.set_queue_len_unit_2"
+		action = "SpineIngress.act_set_queue_len_unit_2"
+		k1 = bfrtC.MakeExactKey("saqr_md.random_id_2", uint64(leaf.ID))
+		k2 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		d1 = bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
+		ks = bfrtC.MakeKeys(k1, k2)
+		ds = bfrtC.MakeData(d1)
+		entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
 		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
 			logrus.Errorf("[Spine] Setting up table %s failed", table)
 			logrus.Fatal(entry)
@@ -780,6 +782,26 @@ func (cp *BfrtSpineCP_V2) Init() {
 
 	var vcID uint64 = 0
 
+	for _, leaf := range spine.Children {
+		worker_count := uint16(0)
+		for _, server := range leaf.Children {
+			// Parham: Check this line seems redundant, how can we access the worker count of server
+			worker_count += server.LastWorkerID - server.FirstWorkerID + 1
+		}
+		// LeafId -> qlen_unit mapping
+		table := "pipe_spine.SpineIngress.set_queue_len_unit_1"
+		action := "SpineIngress.act_set_queue_len_unit_1"
+		k1 := bfrtC.MakeExactKey("saqr_md.low_ds_id", uint64(leaf.ID))
+		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		d1 := bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
+		ks := bfrtC.MakeKeys(k1, k2)
+		ds := bfrtC.MakeData(d1)
+		entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Errorf("[Spine] Setting up table %s failed", table)
+			logrus.Fatal(entry)
+		}
+	}
 	// Init randomly the worker id_map_x: stores the worker ID of the Xth (minimum) qlen.
 	// id_map_1 worker ID is minimum id_map_2 is second best.
 	reg := "pipe_spine.SpineIngress.leaf_id_map_1"
