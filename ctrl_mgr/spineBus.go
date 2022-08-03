@@ -133,7 +133,7 @@ func (bus *SpineBus) processIngress() {
 			}()
 
 		default:
-			continue
+			bus.cp.MonitorStats()
 		}
 	}
 }
