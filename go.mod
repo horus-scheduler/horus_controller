@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/golang/protobuf v1.5.2
 	github.com/google/gopacket v1.1.19
-	github.com/khaledmdiab/bfrt-go-client v0.0.0-20220728031948-d5ae05504170
+	github.com/khaledmdiab/bfrt-go-client v0.0.0-20220803170926-b7acfb60baf2
 	github.com/mdlayher/raw v0.1.0
 	github.com/processout/grpc-go-pool v1.2.1
 	github.com/sirupsen/logrus v1.9.0
