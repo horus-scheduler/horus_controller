@@ -114,7 +114,8 @@ func LeafCPInitAllVer(ctx context.Context,
 				logrus.Fatal(err)
 			}
 			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
-			ks := bfrtC.MakeKeys(k1) // Parham: is this needed even for single key?
+			k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leafIdx))
+			ks := bfrtC.MakeKeys(k1, k2)
 			// Khaled: Check PortId -> UsPort.GetDevPort()
 			// d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
 			d1 := bfrtC.MakeBytesData("port", uint64(server.Port.GetDevPort()))
@@ -147,6 +148,21 @@ func LeafCPInitAllVer(ctx context.Context,
 			if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
 				logrus.Fatal(entry)
 			}
+
+			table = "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
+			action = "LeafIngress.act_forward_saqr"
+			k1 = bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(uid))
+			k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.Index))
+			ks = bfrtC.MakeKeys(k1, k2)
+			usPort := leaf.UsPort.GetDevPort()
+			d1 := bfrtC.MakeBytesData("port", usPort)
+			d2 = bfrtC.MakeBytesData("dst_mac", uint64(100)) // Dummy mac address for port
+			ds = bfrtC.MakeData(d1, d2)
+			err := updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+			if err != nil {
+				logrus.Fatal(err.Error())
+			}
+
 		}
 	}
 
@@ -159,11 +175,13 @@ func LeafCPInitAllVer(ctx context.Context,
 
 	// Table entires for #available workers and #available spine schedulers
 	// Khaled: This should be per VC?
+	num_spines := int(math.Max(float64(len(spines)), 2))
 	table = "pipe_leaf.LeafIngress.get_cluster_num_valid"
 	action = "LeafIngress.act_get_cluster_num_valid"
 	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leafIdx))
 	d1 := bfrtC.MakeBytesData("num_ds_elements", uint64(worker_count))
-	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(len(spines)))
+	// Assumption in P4: minimum two spines (one random bit 0|1)
+	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(num_spines))
 	ks := bfrtC.MakeKeys(k1)
 	ds := bfrtC.MakeData(d1, d2)
 	err := updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
@@ -174,11 +192,13 @@ func LeafCPInitAllVer(ctx context.Context,
 	// Table entries for port mapping of available upstream spines
 	table = "pipe_leaf.LeafIngress.get_spine_dst_id"
 	action = "LeafIngress.act_get_spine_dst_id"
-	for spine_idx, spine := range spines {
+
+	for spine_idx := 0; spine_idx < num_spines; spine_idx++ {
 		k1 := bfrtC.MakeExactKey("saqr_md.random_id_1", uint64(spine_idx))
 		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leafIdx))
 		ks := bfrtC.MakeKeys(k1, k2)
-		d1 := bfrtC.MakeBytesData("spine_dst_id", uint64(spine.ID))
+		// Both will have the same spine ID (at index 0) in our testbed (one spine only)
+		d1 := bfrtC.MakeBytesData("spine_dst_id", uint64(spines[0].ID))
 		ds := bfrtC.MakeData(d1)
 		err := updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
 		if err != nil {
@@ -241,37 +261,19 @@ func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, bfrtclient *bfr
 func ManagerInitAllVer(ctx context.Context, bfrtclient *bfrtC.Client) {
 	logrus.Debugf("[Manager] Setting up common leaf table entries for all emulated leaves")
 
-	// Table entry for CPU port
-	table := "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
-	action := "LeafIngress.act_forward_saqr"
-	k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(model.CPU_PORT_ID))
-	ks := bfrtC.MakeKeys(k1)
-	d1 := bfrtC.MakeBytesData("port", uint64(model.CPU_PORT_ID))
-	d2 := bfrtC.MakeBytesData("dst_mac", uint64(1000)) // Dummy
-	ds := bfrtC.MakeData(d1, d2)
-	entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-	if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-		logrus.Fatal(entry)
-	}
-	// Table entry for upstream port map (spine_id->port or client_id->port)
-	// Khaled:
-	// using model.UpstreamPortMap currently fails.
-	// I thought we will be using ds and us ports here?
-	// for key, value := range model.UpstreamPortMap {
-	var dummyMap map[int]int
-	for key, value := range dummyMap {
-		table = "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
-		action = "LeafIngress.act_forward_saqr"
-		k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(key))
-		ks := bfrtC.MakeKeys(k1)
-		d1 := bfrtC.MakeBytesData("port", uint64(value))
-		d2 := bfrtC.MakeBytesData("dst_mac", uint64(1000+value)) // Dummy
-		ds := bfrtC.MakeData(d1, d2)
-		entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
-			logrus.Fatal(entry)
-		}
-	}
+	// // Table entry for CPU port
+	// table := "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
+	// action := "LeafIngress.act_forward_saqr"
+	// k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(model.CPU_PORT_ID))
+	// ks := bfrtC.MakeKeys(k1)
+	// d1 := bfrtC.MakeBytesData("port", uint64(model.CPU_PORT_ID))
+	// d2 := bfrtC.MakeBytesData("dst_mac", uint64(1000)) // Dummy
+	// ds := bfrtC.MakeData(d1, d2)
+	// entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+	// if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+	// 	logrus.Fatal(entry)
+	// }
+
 }
 
 func SpineCPInitAllVer(ctx context.Context,
@@ -303,7 +305,6 @@ func SpineCPInitAllVer(ctx context.Context,
 
 		// Leaf port mapping
 		table := "pipe_spine.SpineIngress.forward_saqr_switch_dst"
-		// Parham: action doesn't need to start with pipe name? E.g, pipe_spine.Spineingress....
 		action := "SpineIngress.act_forward_saqr"
 		k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(leaf.ID))
 		// Khaled: Check PortId -> DsPort.GetDevPort()
@@ -398,6 +399,7 @@ type SpineCP interface {
 	Init()
 	InitRandomAdjustTables()
 	OnLeafChange(uint64, uint64)
+	MonitorStats()
 }
 
 type FakeManagerCP struct {
@@ -551,7 +553,9 @@ func (cp *BfrtLeafCP_V1) OnServerChange(hmMsg *core.LeafHealthMsg) {
 				logrus.Fatal(err)
 			}
 			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
-			ks := bfrtC.MakeKeys(k1)
+			k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(cp.leaf.Index))
+			ks := bfrtC.MakeKeys(k1, k2)
+			// d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
 			d1 := bfrtC.MakeBytesData("port", uint64(server.Port.GetDevPort()))
 			d2 := bfrtC.MakeBytesData("dst_mac", mac_data)
 			ds := bfrtC.MakeData(d1, d2)
@@ -876,6 +880,42 @@ func (cp *BfrtSpineCP_V2) Init() {
 
 func (cp *BfrtSpineCP_V2) InitRandomAdjustTables() {
 	// Intentionally empty: Not used in V2
+}
+
+func (cp *BfrtSpineCP_V2) MonitorStats() {
+	ctx := context.Background()
+	bfrtclient := cp.client
+	regIdleCount := "pipe_spine.SpineIngress.idle_count"
+	val, err1 := bfrtclient.ReadRegister(ctx, regIdleCount, 0)
+	if err1 != nil {
+		logrus.Fatal("Cannot read register")
+	}
+	logrus.Debugf("Idle Count: %d", val)
+	for i := 0; i < 4; i++ {
+		regIdleList := "pipe_spine.SpineIngress.idle_list"
+		idle_element, _ := bfrtclient.ReadRegister(ctx, regIdleList, uint64(i))
+		logrus.Debugf("IdleList[%d] = %d: ", i, idle_element)
+	}
+}
+
+func (cp *BfrtSpineCP_V1) MonitorStats() {
+	ctx := context.Background()
+	bfrtclient := cp.client
+	regIdleCount := "pipe_spine.SpineIngress.idle_count"
+	val, err1 := bfrtclient.ReadRegister(ctx, regIdleCount, 0)
+	if err1 != nil {
+		logrus.Fatal("Cannot read register")
+	}
+	logrus.Debugf("Idle Count: %d", val)
+	for i := 0; i < 4; i++ {
+		regIdleList := "pipe_spine.SpineIngress.idle_list"
+		idle_element, _ := bfrtclient.ReadRegister(ctx, regIdleList, uint64(i))
+		logrus.Debugf("IdleList[%d] = %d: ", i, idle_element)
+	}
+}
+
+func (cp *FakeSpineCP) MonitorStats() {
+	logrus.Debug("Fake monitor switch stats!")
 }
 
 func (cp *BfrtSpineCP_V2) OnLeafChange(leafID uint64, index uint64) {
