@@ -127,7 +127,7 @@ func LeafCPInitAllVer(ctx context.Context,
 			}
 		}
 
-		for uid := range upstreamIDs {
+		for _, uid := range upstreamIDs {
 			// Table for Mirror functionality to send copy of original response packet
 			table = "$mirror.cfg"
 			action = "$normal"

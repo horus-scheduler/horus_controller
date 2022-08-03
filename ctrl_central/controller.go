@@ -13,6 +13,7 @@ type centralController struct {
 	bus         *CentralBus
 	topology    *model.Topology
 	vcm         *core.VCManager
+	cp          []CentralizedCP
 }
 
 type CentralControllerOption func(*centralController)
@@ -51,10 +52,7 @@ func NewCentralController(opts ...CentralControllerOption) *centralController {
 			vcm.AddVC(vc)
 		}
 	}
-
 	logrus.Info("[Central] Topology and VC Manager are initialized")
-
-	topology.Debug()
 
 	rpcEndPoint := net.NewCentralRpcEndpoint(binCfg.SrvServer, topology, vcm)
 	bus := NewCentralBus(topology, vcm, NewCentralBusChan())
@@ -71,6 +69,19 @@ func NewCentralController(opts ...CentralControllerOption) *centralController {
 		opt(s)
 	}
 
+	for _, asicCfg := range topoCfg.AsicConf.Asics {
+		var cp CentralizedCP
+		switch asicCfg.CtrlAPI {
+		case "fake":
+			cp = NewFakeCentralizedCP(topology)
+		case "bfrt":
+			cp = NewBfrtCentralizedCP(topology)
+		default:
+			logrus.Fatalf("[Centralized] Control API %s is invalid!", asicCfg.CtrlAPI)
+		}
+		s.cp = append(s.cp, cp)
+	}
+
 	return s
 }
 
@@ -78,8 +89,11 @@ func (cc *centralController) Run() {
 	// RPC connections
 	go cc.rpcEndPoint.Start()
 
+	for _, cp := range cc.cp {
+		cp.InitPorts()
+	}
+
 	// Components
-	// go cc.eventSequencer.Start()
 	go cc.bus.Start()
 	select {}
 }
