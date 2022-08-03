@@ -71,7 +71,6 @@ type spineConfig struct {
 	Asic    string
 }
 
-// Parham: Please check, added PortID
 type leafConfig struct {
 	ID          uint16
 	Index       uint16
@@ -79,14 +78,14 @@ type leafConfig struct {
 	MgmtAddress string   `mapstructure:"mgmtAddress"`
 	ServerIDs   []uint16 `mapstructure:"servers"`
 	Asic        string
-	PortID      uint16 `mapstructure:"port_id"`
-	UsPort      string `mapstructure:"us_port"`
-	DsPort      string `mapstructure:"ds_port"`
+	// PortID      uint16 `mapstructure:"port_id"`
+	UsPort string `mapstructure:"us_port"`
+	DsPort string `mapstructure:"ds_port"`
 }
 
 type serverConfig struct {
-	ID           uint16
-	PortID       uint16 `mapstructure:"port_id"`
+	ID uint16
+	// PortID       uint16 `mapstructure:"port_id"`
 	Port         string `mapstructure:"port"`
 	Address      string
 	WorkersCount uint16 `mapstructure:"workers_count"`

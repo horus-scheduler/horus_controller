@@ -6,8 +6,7 @@
         deviceId = 0
         pipeId = 65535
         ctrlAddress = "0.0.0.0:50052"
-        # Options: "fake" | "bfrt"
-        ctrlAPI = "fake"
+        ctrlAPI = "fake" # Options: "fake" | "bfrt"
 
 [ports]
     # IMPORTNT NOTES: 
@@ -70,7 +69,6 @@
         servers = [0] # order matters
         # switch-specific values
         asic = "tofino"
-        port_id = 36
         us_port = "21/0" # from leaf->spine
         ds_port = "27/0" # from spine->leaf
 
@@ -83,7 +81,6 @@
         servers = [1] # order matters
         # switch-specific values
         asic = "tofino"
-        port_id = 44
         us_port = "22/0" # from leaf->spine
         ds_port = "28/0" # from spine->leaf
         
@@ -96,7 +93,6 @@
         servers = [2] # order matters
         # switch-specific values
         asic = "tofino"
-        port_id = 20
         us_port = "19/0" # from leaf->spine
         ds_port = "25/0" # from spine->leaf
 
@@ -109,14 +105,12 @@
         servers = [3] # order matters
         # switch-specific values
         asic = "tofino"
-        port_id = 52
         us_port = "23/0" # from leaf->spine
         ds_port = "29/0" # from spine->leaf
 
     #cs-nsl-55
     [[topology.servers]]
         id = 0
-        port_id = 132
         port = "1/0" # server<->leaf
         address = "F8:F2:1E:3A:13:EC"
         workers_count = 8
@@ -124,7 +118,6 @@
     #cs-nsl-56
     [[topology.servers]]
         id = 1
-        port_id = 134
         port = "1/2" # server<->leaf
         address = "F8:F2:1E:3A:13:0C"
         workers_count = 8
@@ -132,7 +125,6 @@
     #cs-nsl-57
     [[topology.servers]]
         id = 2
-        port_id = 140
         port = "2/0" # server<->leaf
         address = "F8:F2:1E:3A:13:C4"
         workers_count = 8
@@ -140,7 +132,6 @@
     #cs-nsl-58
     [[topology.servers]]
         id = 3
-        port_id = 142
         port = "2/2" # server<->leaf
         address = "F8:F2:1E:3A:07:24"
         workers_count = 8
