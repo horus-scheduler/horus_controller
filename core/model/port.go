@@ -200,11 +200,11 @@ func NewPortRegistryFromInfo(asic *Asic,
 			_, found := pr.PortMap.Load(spec.ID)
 			if !found {
 				port := NewPort(asic, spec, portCfg)
+				port.SetDevPort(portInfo.DevPort)
 				pr.PortMap.Store(port.Spec.ID, port)
 			} else {
 				logrus.Warnf("PortSpec with ID=%s exists. Ignoring the new one.", spec.ID)
 			}
-
 		} else {
 			logrus.Warnf("PortConfig with ID=%s doesn't exists.", cfgID)
 		}

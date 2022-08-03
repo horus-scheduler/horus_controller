@@ -915,7 +915,7 @@ func (cp *BfrtSpineCP_V1) MonitorStats() {
 }
 
 func (cp *FakeSpineCP) MonitorStats() {
-	logrus.Debug("Fake monitor switch stats!")
+	// logrus.Debug("Fake monitor switch stats!")
 }
 
 func (cp *BfrtSpineCP_V2) OnLeafChange(leafID uint64, index uint64) {
