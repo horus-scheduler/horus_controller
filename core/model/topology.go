@@ -564,7 +564,7 @@ func (s *Topology) Debug() {
 		logrus.Debug(
 			"-- Client: ", client.ID,
 			", Port: ", client.Port.Spec.ID,
-			", Port DEVPORT: ", client.Port.GetDevPort(),
+			", DEVPORT: ", client.Port.GetDevPort(),
 		)
 		client.RUnlock()
 	}
@@ -589,15 +589,16 @@ func (s *Topology) Debug() {
 				", Last WID: ", node.LastWorkerID,
 				", ASIC: ", node.Asic.ID,
 				", DS Port: ", node.DsPort.Spec.ID,
-				", DS Port DEVPORT: ", node.DsPort.GetDevPort(),
+				", DS DEVPORT: ", node.DsPort.GetDevPort(),
 				", US Port: ", node.UsPort.Spec.ID,
-				", US Port DEVPORT: ", node.UsPort.GetDevPort(),
+				", US DEVPORT: ", node.UsPort.GetDevPort(),
 			)
 		} else if node.Type == NodeType_Server {
 			logrus.Debug("--- Server: ", node.ID,
 				", First WID: ", node.FirstWorkerID,
 				", Last WID: ", node.LastWorkerID,
 				", Port: ", node.Port.Spec.ID,
+				", DEVPORT: ", node.Port.GetDevPort(),
 			)
 		}
 		for i := len(node.Children) - 1; i >= 0; i-- {

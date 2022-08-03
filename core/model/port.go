@@ -90,6 +90,21 @@ func (p *Port) String() string {
 	return fmt.Sprintf("\t\t%s, DevPort=%d (%s)", p.Spec, p.devPort, p.Config)
 }
 
+func (p *Port) ToInfo() *horus_pb.PortInfo {
+	portInfo := &horus_pb.PortInfo{}
+	portInfo.ID = p.Spec.ID
+	portInfo.Cage = uint32(p.Spec.Cage)
+	portInfo.Lane = uint32(p.Spec.Lane)
+	portInfo.DevPort = p.GetDevPort()
+	portInfo.PortConfig = &horus_pb.PortConfigInfo{}
+	portInfo.PortConfig.ID = p.Config.ID
+	portInfo.PortConfig.Speed = p.Config.Speed
+	portInfo.PortConfig.Fec = p.Config.Fec
+	portInfo.PortConfig.An = p.Config.An
+
+	return portInfo
+}
+
 type PortSpec struct {
 	ID   string
 	Cage uint64

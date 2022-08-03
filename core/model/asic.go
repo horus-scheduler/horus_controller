@@ -73,6 +73,23 @@ func NewAsicFromInfo(asicInfo *horus_pb.AsicInfo, portConfigs []*horus_pb.PortCo
 	return asic
 }
 
+func (a *Asic) ToInfo() *horus_pb.AsicInfo {
+	asicInfo := &horus_pb.AsicInfo{}
+	asicInfo.ID = a.ID
+	asicInfo.Program = a.Program
+	asicInfo.DeviceID = uint32(a.DeviceID)
+	asicInfo.PipeID = uint32(a.PipeID)
+	asicInfo.CtrlAddress = a.CtrlAddress
+	asicInfo.CtrlAPI = a.CtrlAPI
+
+	for _, port := range a.PortRegistry.PortMap.Internal() {
+		portInfo := port.ToInfo()
+		asicInfo.PortsInfo = append(asicInfo.PortsInfo, portInfo)
+	}
+
+	return asicInfo
+}
+
 func (a *Asic) String() string {
 	return fmt.Sprintf("ASIC ID=%s, Program=%s, DevID=%d, PipeID=%d, CtrlAddr=%s, API=%s",
 		a.ID, a.Program, a.DeviceID, a.PipeID, a.CtrlAddress, a.CtrlAPI)
@@ -109,28 +126,9 @@ func (ar *AsicRegistry) EncodeToPortConfigInfo() []*horus_pb.PortConfigInfo {
 
 func (ar *AsicRegistry) EncodeToAsicInfo() []*horus_pb.AsicInfo {
 	var asicsInfo []*horus_pb.AsicInfo
-	for _, asic := range ar.AsicMap.Internal() {
-		asicInfo := &horus_pb.AsicInfo{}
-		asicInfo.ID = asic.ID
-		asicInfo.Program = asic.Program
-		asicInfo.DeviceID = uint32(asic.DeviceID)
-		asicInfo.PipeID = uint32(asic.PipeID)
-		asicInfo.CtrlAddress = asic.CtrlAddress
-		asicInfo.CtrlAPI = asic.CtrlAPI
 
-		for _, port := range asic.PortRegistry.PortMap.Internal() {
-			portInfo := &horus_pb.PortInfo{}
-			portInfo.ID = port.Spec.ID
-			portInfo.Cage = uint32(port.Spec.Cage)
-			portInfo.Lane = uint32(port.Spec.Lane)
-			portInfo.DevPort = port.GetDevPort()
-			portInfo.PortConfig = &horus_pb.PortConfigInfo{}
-			portInfo.PortConfig.ID = port.Config.ID
-			portInfo.PortConfig.Speed = port.Config.Speed
-			portInfo.PortConfig.Fec = port.Config.Fec
-			portInfo.PortConfig.An = port.Config.An
-			asicInfo.PortsInfo = append(asicInfo.PortsInfo, portInfo)
-		}
+	for _, asic := range ar.AsicMap.Internal() {
+		asicInfo := asic.ToInfo()
 		asicsInfo = append(asicsInfo, asicInfo)
 	}
 	return asicsInfo
