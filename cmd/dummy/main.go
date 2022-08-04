@@ -265,7 +265,7 @@ func removeVC(pool *grpcpool.Pool,
 		logrus.Error(err)
 	}
 }
-
+/*
 func test_fail_three_servers_then_leaf(pool *grpcpool.Pool) {
 	logrus.Info("Failing server 0")
 	failServer(pool, 0)
@@ -304,6 +304,7 @@ func test_add_leaf_with_servers_then_fail(pool *grpcpool.Pool) {
 	time.Sleep(time.Second)
 	failLeaf(pool, 3)
 }
+*/
 
 func test_leaf_index(client *HorusClient) {
 	client.FailLeaf(1)
