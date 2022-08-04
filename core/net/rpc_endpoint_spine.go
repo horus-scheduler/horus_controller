@@ -18,6 +18,45 @@ import (
 	"google.golang.org/grpc"
 )
 
+type SpineRpcEndpointLite struct {
+	sync.RWMutex
+	SrvCentralAddr string
+}
+
+func NewSpineRpcEndpointLite(srvCentralAddr string) *SpineRpcEndpointLite {
+	return &SpineRpcEndpointLite{SrvCentralAddr: srvCentralAddr}
+}
+
+func (s *SpineRpcEndpointLite) GetTopology() (*horus_pb.TopoInfo, error) {
+	s.RLock()
+	defer s.RUnlock()
+
+	var factory grpcpool.Factory
+	factory = func() (*grpc.ClientConn, error) {
+		conn, err := grpc.Dial(s.SrvCentralAddr, grpc.WithInsecure())
+		if err != nil {
+			logrus.Error(err)
+		}
+		return conn, err
+	}
+	var err error
+	centralConnPool, err := grpcpool.New(factory, 5, 20, 5*time.Second)
+	if err != nil {
+		logrus.Error(err)
+	}
+
+	conn, err := centralConnPool.Get(context.Background())
+	if err != nil {
+		logrus.Error(err)
+		return nil, err
+	}
+	defer conn.Close()
+
+	client := horus_pb.NewHorusServiceClient(conn.ClientConn)
+	topoInfo, err := client.GetTopology(context.Background(), &empty.Empty{})
+	return topoInfo, err
+}
+
 type SpineRpcEndpoint struct {
 	sync.RWMutex
 	SrvLAddr       string

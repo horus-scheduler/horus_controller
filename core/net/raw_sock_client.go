@@ -39,7 +39,7 @@ func NewRawSockClient(ifName string, sendChan chan []byte, recvChan chan []byte)
 }
 
 func (rsc *RawSockClient) Connect() error {
-	logrus.Infof("Connecting to %s", rsc.ifName)
+	// logrus.Infof("Connecting to %s", rsc.ifName)
 	var err error
 
 	rsc.connLock.Lock()
@@ -85,10 +85,11 @@ func (rsc *RawSockClient) reconnect() {
 		rsc.connLock.RUnlock()
 
 		if checkConnection {
-			logrus.Debugf("Attempting to reconnect to data path: %s", rsc.ifName)
+			// logrus.Debugf("Attempting to reconnect to data path: %s", rsc.ifName)
 			err := rsc.Connect()
 			if err != nil {
-				logrus.Errorln("Error re-connecting to data path: ", err)
+				continue
+				// logrus.Errorln("Error re-connecting to data path: ", err)
 			}
 			time.Sleep(time.Second)
 		}

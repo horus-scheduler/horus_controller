@@ -101,8 +101,13 @@ func NewBareLeafController(ctrlID uint16, pipeID uint32, cfg *rootConfig, opts .
 }
 
 func NewSpineController(ctrlID uint16, pipeID uint32, topoFp string, cfg *rootConfig) *spineController {
-	topoCfg := model.ReadTopologyFile(topoFp)
-	topology := model.NewDCNFromConf(topoCfg)
+	// topoCfg := model.ReadTopologyFile(topoFp)
+	rpcLite := horus_net.NewSpineRpcEndpointLite(cfg.RemoteSrvServer)
+	topoInfo, err := rpcLite.GetTopology()
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	topology := model.NewDCNFromTopoInfo(topoInfo)
 	vcm := core.NewVCManager(topology)
 
 	asicEgress := make(chan []byte, horus_net.DefaultUnixSockSendSize)

@@ -52,6 +52,7 @@ func NewClient(id uint16, port *Port) *Node {
 
 func NewLeaf(address, mgmtAddress string, id uint16, dsPort *Port, usPort *Port) *Node {
 	return &Node{
+		Address:     address,
 		MgmtAddress: mgmtAddress,
 		ID:          id,
 		Asic:        dsPort.Asic,
