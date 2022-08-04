@@ -26,6 +26,9 @@ type CentralRpcEndpoint struct {
 	newServers    chan *ServerAddedMessage
 	newVCs        chan *VCUpdatedMessage
 
+	enabledPorts  chan *PortEnabledMessage
+	disabledPorts chan *PortDisabledMessage
+
 	topology      *model.Topology
 	vcm           *core.VCManager
 	spineConnPool map[uint16]*grpcpool.Pool
@@ -36,6 +39,8 @@ type CentralRpcEndpoint struct {
 func NewCentralRpcEndpoint(srvLAddr string,
 	topology *model.Topology,
 	vcm *core.VCManager,
+	enabledPorts chan *PortEnabledMessage,
+	disabledPorts chan *PortDisabledMessage,
 ) *CentralRpcEndpoint {
 	connPool := make(map[uint16]*grpcpool.Pool)
 	return &CentralRpcEndpoint{
@@ -48,6 +53,8 @@ func NewCentralRpcEndpoint(srvLAddr string,
 		newLeaves:     make(chan *LeafAddedMessage, DefaultRpcRecvSize),
 		newServers:    make(chan *ServerAddedMessage, DefaultRpcRecvSize),
 		newVCs:        make(chan *VCUpdatedMessage, DefaultRpcRecvSize),
+		enabledPorts:  enabledPorts,
+		disabledPorts: disabledPorts,
 		doneChan:      make(chan bool, 1),
 	}
 }
@@ -62,7 +69,9 @@ func (s *CentralRpcEndpoint) createServiceListener() error {
 	topoServer := NewCentralSrvServer(s.topology, s.vcm,
 		s.failedLeaves, s.failedServers,
 		s.newLeaves, s.newServers,
-		s.newVCs)
+		s.newVCs,
+		s.enabledPorts,
+		s.disabledPorts)
 	horus_pb.RegisterHorusServiceServer(rpcServer, topoServer)
 	return rpcServer.Serve(lis)
 }
