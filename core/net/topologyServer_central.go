@@ -76,6 +76,8 @@ func (s *centralSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafI
 	}
 	if leaf.Parent != nil {
 		spine := leaf.Parent
+		s.enabledPorts <- &PortEnabledMessage{Port: leaf.DsPort}
+		s.enabledPorts <- &PortEnabledMessage{Port: leaf.UsPort}
 		s.newLeaves <- NewLeafAddedMessage(leafInfo, spine)
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}
@@ -143,6 +145,7 @@ func (s *centralSrvServer) AddServer(ctx context.Context, serverInfo *horus_pb.S
 	}
 	if server.Parent != nil && server.Parent.Parent != nil {
 		spine := server.Parent.Parent
+		s.enabledPorts <- &PortEnabledMessage{Port: server.Port}
 		s.newServers <- NewServerAddedMessage(serverInfo, spine)
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}
