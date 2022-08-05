@@ -36,6 +36,14 @@ type LeafAddedMessage struct {
 	Dst  *model.Node
 }
 
+type PortDisabledMessage struct {
+	Port *model.Port
+}
+
+type PortEnabledMessage struct {
+	Port *model.Port
+}
+
 type VCUpdatedMessage struct {
 	VCInfo *horus_pb.VCInfo
 	Dsts   []*model.Node

@@ -6,7 +6,7 @@
         deviceId = 0
         pipeId = 65535
         ctrlAddress = "0.0.0.0:50052"
-        ctrlAPI = "bfrt" # Options: "fake" | "bfrt"
+        ctrlAPI = "fake" # Options: "fake" | "bfrt"
 
 [ports]
     # IMPORTNT NOTES: 

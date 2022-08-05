@@ -309,19 +309,24 @@ func test_add_leaf_with_servers_then_fail(pool *grpcpool.Pool) {
 
 func test_leaf_index(client *HorusClient) {
 	client.FailLeaf(1)
-	time.Sleep(5 * time.Second)
-	client.AddLeaf(4, 100, "28/0", "22/0", "0.0.0.0:6005", "0.0.0.0:7001")
-	time.Sleep(25 * time.Second)
-	client.AddServer(10, 8, "9/1", "aa:aa:aa:aa:aa:aa", 4)
-	time.Sleep(time.Second)
-	client.AddServer(11, 8, "9/2", "bb:bb:bb:bb:bb:bb", 4)
+	// time.Sleep(5 * time.Second)
+	// client.AddLeaf(4, 100, "28/0", "22/0", "0.0.0.0:6005", "0.0.0.0:7001")
+	// time.Sleep(25 * time.Second)
+	// client.AddServer(10, 8, "9/1", "aa:aa:aa:aa:aa:aa", 4)
+	// time.Sleep(time.Second)
+	// client.AddServer(11, 8, "9/2", "bb:bb:bb:bb:bb:bb", 4)
 }
 
 func main() {
 	client := NewHorusClient("0.0.0.0:4001", "tofino")
 	client.GetTopology()
 	time.Sleep(10 * time.Second)
-	test_leaf_index(client)
+	// client.FailServer(1)
+	client.AddLeaf(4, 100, "26/0", "20/0", "0.0.0.0:6005", "0.0.0.0:7001")
+	time.Sleep(10 * time.Second)
+	client.AddServer(10, 8, "9/1", "aa:aa:aa:aa:aa:aa", 4)
+	time.Sleep(10 * time.Second)
+	client.GetTopology()
 
 	// test_leaf_index(pool)
 	// test_fail_three_servers_then_leaf(pool)

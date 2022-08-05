@@ -20,6 +20,9 @@ type centralSrvServer struct {
 	newLeaves     chan *LeafAddedMessage
 	newServers    chan *ServerAddedMessage
 
+	enabledPorts  chan *PortEnabledMessage
+	disabledPorts chan *PortDisabledMessage
+
 	newVCs chan *VCUpdatedMessage
 
 	topology *model.Topology
@@ -33,6 +36,8 @@ func NewCentralSrvServer(topology *model.Topology,
 	newLeaves chan *LeafAddedMessage,
 	newServers chan *ServerAddedMessage,
 	newVCs chan *VCUpdatedMessage,
+	enabledPorts chan *PortEnabledMessage,
+	disabledPorts chan *PortDisabledMessage,
 ) *centralSrvServer {
 	return &centralSrvServer{
 		topology:      topology,
@@ -42,6 +47,8 @@ func NewCentralSrvServer(topology *model.Topology,
 		newLeaves:     newLeaves,
 		newServers:    newServers,
 		newVCs:        newVCs,
+		enabledPorts:  enabledPorts,
+		disabledPorts: disabledPorts,
 	}
 }
 
@@ -69,6 +76,8 @@ func (s *centralSrvServer) AddLeaf(ctx context.Context, leafInfo *horus_pb.LeafI
 	}
 	if leaf.Parent != nil {
 		spine := leaf.Parent
+		s.enabledPorts <- &PortEnabledMessage{Port: leaf.DsPort}
+		s.enabledPorts <- &PortEnabledMessage{Port: leaf.UsPort}
 		s.newLeaves <- NewLeafAddedMessage(leafInfo, spine)
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}
@@ -108,11 +117,19 @@ func (s *centralSrvServer) FailLeaf(ctx context.Context, leafInfo *horus_pb.Leaf
 	for _, spine := range spinesMap.Internal() {
 		spines = append(spines, spine)
 	}
-
+	var servers []*model.Node
+	for _, server := range leaf.Children {
+		servers = append(servers, server)
+	}
 	// 4. Detach and remove the leaf
 	detached := s.vcm.DetachLeaf(leafID)
 	leafIdx, _ := s.topology.RemoveLeaf(leafID)
 	if leaf != nil && leafIdx >= 0 && detached {
+		s.disabledPorts <- &PortDisabledMessage{Port: leaf.DsPort}
+		s.disabledPorts <- &PortDisabledMessage{Port: leaf.UsPort}
+		for _, server := range servers {
+			s.disabledPorts <- &PortDisabledMessage{Port: server.Port}
+		}
 		s.failedLeaves <- NewLeafFailedMessage(leafInfo, spines)
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}
@@ -128,6 +145,7 @@ func (s *centralSrvServer) AddServer(ctx context.Context, serverInfo *horus_pb.S
 	}
 	if server.Parent != nil && server.Parent.Parent != nil {
 		spine := server.Parent.Parent
+		s.enabledPorts <- &PortEnabledMessage{Port: server.Port}
 		s.newServers <- NewServerAddedMessage(serverInfo, spine)
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}
@@ -176,6 +194,7 @@ func (s *centralSrvServer) FailServer(ctx context.Context, serverInfo *horus_pb.
 	removed, _ := s.topology.RemoveServer(serverID)
 	logrus.Debugf("[CentralServer] Server %d detached? %t, removed? %t", serverID, detached, removed)
 	if removed && detached {
+		s.disabledPorts <- &PortDisabledMessage{Port: server.Port}
 		s.failedServers <- NewServerFailedMessage(serverInfo, spines)
 		return &horus_pb.HorusResponse{Status: "OK"}, nil
 	}
