@@ -127,8 +127,8 @@ func LeafCPInitAllVer(ctx context.Context,
 				logrus.Fatal(err.Error())
 			}
 		}
-
-		for _, uid := range upstreamIDs {
+	}
+	for _, uid := range upstreamIDs {
 			// Table for Mirror functionality to send copy of original response packet
 			table = "$mirror.cfg"
 			action = "$normal"
@@ -137,8 +137,8 @@ func LeafCPInitAllVer(ctx context.Context,
 			dstr1 := bfrtC.MakeStrData("$direction", "INGRESS")
 			// Each emulated leaf will use a seperate port for mirror
 			// d2 := bfrtC.MakeBytesData("$ucast_egress_port", uint64(model.LeafUpstreamPortMap[leaf.Index]))
-			// Khaled: Check LeafUpstreamPortMap[..] -> leaf.DsPort.GetDevPort()
-			usPortId := leaf.DsPort.GetDevPort()
+			// Khaled: Check LeafUpstreamPortMap[..] -> leaf.UsPort.GetDevPort()
+			usPortId := leaf.UsPort.GetDevPort()
 			d2 := bfrtC.MakeBytesData("$ucast_egress_port", uint64(usPortId))
 			d3 := bfrtC.MakeBoolData("$ucast_egress_port_valid", true)
 			d4 := bfrtC.MakeBoolData("$session_enable", true)
@@ -146,6 +146,7 @@ func LeafCPInitAllVer(ctx context.Context,
 			ds := bfrtC.MakeData(dstr1, d2, d3, d4)
 			entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
 			if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+				logrus.Debugf("Error in Mirror table entry: leaf %d, key %d, session: %d", leaf.Index, key, usPortId)
 				logrus.Fatal(entry)
 			}
 
@@ -164,7 +165,6 @@ func LeafCPInitAllVer(ctx context.Context,
 			}
 
 		}
-	}
 
 	// Register entry #idle workers
 	reg = "pipe_leaf.LeafIngress.idle_count"
@@ -249,7 +249,7 @@ func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, bfrtclient *bfr
 	table = "pipe_leaf.LeafIngress.set_queue_len_unit"
 	action = "LeafIngress.act_set_queue_len_unit"
 	k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.ID))
-	d1 = bfrtC.MakeBytesData("hdr.saqr.cluster_id", uint64(qlen_unit))
+	d1 = bfrtC.MakeBytesData("cluster_unit", uint64(qlen_unit))
 	ks = bfrtC.MakeKeys(k1)
 	ds = bfrtC.MakeData(d1)
 	err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
@@ -544,7 +544,7 @@ func (cp *BfrtLeafCP_V1) OnServerChange(hmMsg *core.LeafHealthMsg) {
 	for _, server := range hmMsg.Updated {
 		for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
 			// Parham: Assumed e.ctrlID is 0-indexed and indicates virtual leaf ID?
-			index := uint16(cp.leaf.ID)*model.MAX_VCLUSTER_WORKERS + wid
+			index := uint16(cp.leaf.Index)*model.MAX_VCLUSTER_WORKERS + wid
 			// Table entries for worker index to port mappings
 			hw, err := net.ParseMAC(server.Address)
 			hw = append(make([]byte, 8-len(hw)), hw...)

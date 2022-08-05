@@ -129,26 +129,29 @@ func (e *LeafBus) processIngress() {
 				// TODO: Complete...
 				// hmMsg.Updated includes the set of servers to be updated
 				// src & dst IPs, src ID, cluster ID, pkt type
+				leaf := e.topology.GetNode(e.ctrlID, model.NodeType_Leaf)
+				if leaf != nil {
+					e.cp.OnServerChange(hmMsg)
+				}
 				for _, server := range hmMsg.Updated {
 					logrus.Debugf("[LeafBus-%d] Sending update pkt to server %d", e.ctrlID, server.ID)
+					firstDstId := uint16(leaf.Index) * model.MAX_VCLUSTER_WORKERS + server.FirstWorkerID
 					horusPkt := &horus_net.HorusPacket{
-						PktType:    horus_net.PKT_TYPE_KEEP_ALIVE,
-						ClusterID:  0xffff,
-						SrcID:      0xffff,
-						DstID:      server.ID,
+						PktType:    horus_net.PKT_TYPE_WORKER_ID,
+						ClusterID:  leaf.Index,
+						QLen:       firstDstId,
+						SrcID:      leaf.Index,
+						DstID:      firstDstId,
 						SeqNum:     0,
 						RestOfData: []byte{0x00},
 					}
 					pktBytes, err := horus_net.CreateFullHorusPacket(horusPkt,
 						net.IP{1, 1, 1, 1},
 						net.IP{2, 2, 2, 2})
-					if err != nil {
+					logrus.Debug(pktBytes)
+					if err == nil {
 						e.asicEgress <- pktBytes
 					}
-				}
-				leaf := e.topology.GetNode(e.ctrlID, model.NodeType_Leaf)
-				if leaf != nil {
-					e.cp.OnServerChange(hmMsg)
 				}
 			}()
 
@@ -159,11 +162,13 @@ func (e *LeafBus) processIngress() {
 				if horusLayer := pkt.Layer(horus_net.LayerTypeHorus); horusLayer != nil {
 					// Get actual pkt
 					horusPkt, _ := horusLayer.(*horus_net.HorusPacket)
-					logrus.Debug(horusPkt)
+					//logrus.Debug(pkt.Data())
+
 					// TODO: Which pkt type indicates a ping from the client?
 					if horusPkt.PktType == horus_net.PKT_TYPE_KEEP_ALIVE {
 						// Start the Ping-pong protocol
 						nodeID := horusPkt.SrcID
+						logrus.Debugf("Received KEEPALIVE form %d", nodeID)
 						// Update the health manager
 						e.healthMgr.OnNodePingRecv(nodeID, 0)
 

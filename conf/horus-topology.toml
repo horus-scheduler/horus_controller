@@ -69,8 +69,8 @@
         servers = [0] # order matters
         # switch-specific values
         asic = "tofino"
-        us_port = "21/0" # from leaf->spine
-        ds_port = "27/0" # from spine->leaf
+        us_port = "27/0" # from leaf->spine
+        ds_port = "21/0" # from spine->leaf
 
     [[topology.leaves]]
         # horus-specific values
@@ -81,8 +81,8 @@
         servers = [1] # order matters
         # switch-specific values
         asic = "tofino"
-        us_port = "22/0" # from leaf->spine
-        ds_port = "28/0" # from spine->leaf
+        us_port = "28/0" # from leaf->spine
+        ds_port = "22/0" # from spine->leaf
         
     [[topology.leaves]]
         # horus-specific values
@@ -93,8 +93,8 @@
         servers = [2] # order matters
         # switch-specific values
         asic = "tofino"
-        us_port = "19/0" # from leaf->spine
-        ds_port = "25/0" # from spine->leaf
+        us_port = "25/0" # from leaf->spine
+        ds_port = "19/0" # from spine->leaf
 
     [[topology.leaves]]
         # horus-specific values
@@ -102,11 +102,11 @@
         index = 3
         address = "0.0.0.0:6004"
         mgmtAddress = "0.0.0.0:7001"
-        servers = [3] # order matters
+        servers = [3, 4] # order matters
         # switch-specific values
         asic = "tofino"
-        us_port = "23/0" # from leaf->spine
-        ds_port = "29/0" # from spine->leaf
+        us_port = "29/0" # from leaf->spine
+        ds_port = "23/0" # from spine->leaf
 
     #cs-nsl-55
     [[topology.servers]]
@@ -134,4 +134,11 @@
         id = 3
         port = "2/2" # server<->leaf
         address = "F8:F2:1E:3A:07:24"
+        workers_count = 8
+
+    #cs-nsl-ramses
+    [[topology.servers]]
+        id = 4
+        port = "3/2" # server<->leaf
+        address = "F8:F2:1E:13:CA:FC"
         workers_count = 8
