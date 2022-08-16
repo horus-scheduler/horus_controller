@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-
-	"github.com/horus-scheduler/horus_controller/core"
 	"github.com/horus-scheduler/horus_controller/core/model"
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
 	"github.com/sirupsen/logrus"
@@ -94,7 +92,7 @@ func LeafCPInitAllVer(ctx context.Context,
 		// Parham: Check this line seems redundant, how can we access the worker count of server
 		worker_count += server.LastWorkerID - server.FirstWorkerID + 1
 		for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
-			index := leafIdx*model.MAX_VCLUSTER_WORKERS + wid
+			index := leaf.ID*model.MAX_VCLUSTER_WORKERS + wid
 			// logrus.Info("leafIdx: ", leafIdx, ", calc_index: ", index, ", wid: ", wid)
 			// TODO: Check wid logic, we assume each leaf has workers 0 indexed
 			// but for virt. implementation we assign wids: [0,n] for leaf1, [n+1-m] for leaf2 ...
@@ -114,7 +112,7 @@ func LeafCPInitAllVer(ctx context.Context,
 				logrus.Fatal(err)
 			}
 			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
-			k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leafIdx))
+			k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.ID))
 			ks := bfrtC.MakeKeys(k1, k2)
 			// Khaled: Check PortId -> UsPort.GetDevPort()
 			// d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
@@ -144,11 +142,16 @@ func LeafCPInitAllVer(ctx context.Context,
 			d4 := bfrtC.MakeBoolData("$session_enable", true)
 			ks := bfrtC.MakeKeys(k1)
 			ds := bfrtC.MakeData(dstr1, d2, d3, d4)
-			entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
-			if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			err := updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+			if err != nil {
 				logrus.Debugf("Error in Mirror table entry: leaf %d, key %d, session: %d", leaf.Index, key, usPortId)
-				logrus.Fatal(entry)
+                                logrus.Fatal(err)
 			}
+			//entry := bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+			//if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			//	logrus.Debugf("Error in Mirror table entry: leaf %d, key %d, session: %d", leaf.Index, key, usPortId)
+			//	logrus.Fatal(entry)
+			//}
 
 			table = "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
 			action = "LeafIngress.act_forward_saqr"
@@ -159,7 +162,7 @@ func LeafCPInitAllVer(ctx context.Context,
 			d1 := bfrtC.MakeBytesData("port", usPort)
 			d2 = bfrtC.MakeBytesData("dst_mac", uint64(100)) // Dummy mac address for port
 			ds = bfrtC.MakeData(d1, d2)
-			err := updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+			err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
 			if err != nil {
 				logrus.Fatal(err.Error())
 			}
@@ -219,8 +222,7 @@ func LeafCPInitAllVer(ctx context.Context,
 		logrus.Fatal(err.Error())
 	}
 }
-
-func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, bfrtclient *bfrtC.Client) {
+func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, updated []*model.Node, bfrtclient *bfrtC.Client, added bool) {
 	logrus.Info("Initializing Leaf CP common for all Versions")
 
 	// findout number of alive workers
@@ -255,6 +257,58 @@ func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, bfrtclient *bfr
 	err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
 	if err != nil {
 		logrus.Fatal(err.Error())
+	}
+
+	// Update server port mappings
+	table = "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
+	action = "LeafIngress.act_forward_saqr"
+	for _, server := range updated {
+		for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
+			// Parham: Assumed e.ctrlID is 0-indexed and indicates virtual leaf ID?
+			index := uint16(leaf.ID)*model.MAX_VCLUSTER_WORKERS + wid
+			// Table entries for worker index to port mappings
+			hw, err := net.ParseMAC(server.Address)
+			hw = append(make([]byte, 8-len(hw)), hw...)
+			mac_data := binary.BigEndian.Uint64(hw)
+			if err != nil {
+				logrus.Fatal(err)
+			}
+			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
+			k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.ID))
+			ks := bfrtC.MakeKeys(k1, k2)
+			// d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
+			d1 := bfrtC.MakeBytesData("port", uint64(server.Port.GetDevPort()))
+			d2 := bfrtC.MakeBytesData("dst_mac", mac_data)
+			ds := bfrtC.MakeData(d1, d2)
+			err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
+			if err != nil {
+				logrus.Fatal(err.Error())
+			}
+		}
+	}
+
+	if added {
+		// read current idle count
+		regIdleCount := "pipe_leaf.LeafIngress.idle_count"
+		idleCount, err1 := bfrtclient.ReadRegister(ctx, regIdleCount, uint64(leaf.ID))
+		if err1 != nil {
+			logrus.Fatal("Cannot read register")
+		}
+		// add new workers to idle list
+		reg := "pipe_leaf.LeafIngress.idle_list"
+		for _, server := range updated {
+			for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
+				index := leaf.ID*model.MAX_VCLUSTER_WORKERS + wid
+				rentry := bfrtclient.NewRegisterEntry(reg, uint64(index), uint64(idleCount), nil)
+				if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+					logrus.Errorf("[Leaf] Setting up register %s at index = %d failed", reg, index)
+					logrus.Fatal(rentry)
+				}
+				idleCount += 1
+			}
+		}
+		// update idle count
+		bfrtclient.NewRegisterEntry(regIdleCount, uint64(leaf.ID), idleCount, nil)
 	}
 }
 
@@ -348,7 +402,8 @@ func SpineCPInitAllVer(ctx context.Context,
 func SpineCPOnLeafChangeAllVer(ctx context.Context,
 	bfrtclient *bfrtC.Client,
 	spine *model.Node,
-	leafID uint64) {
+	leafID uint64,
+	added bool) {
 	INVALID_VAL_16bit := uint64(0x7FFF)
 	vcID := uint64(0)
 	idleCount := uint64(0)
@@ -365,23 +420,34 @@ func SpineCPOnLeafChangeAllVer(ctx context.Context,
 	if err1 != nil {
 		logrus.Fatal("Cannot read register")
 	}
-	if indexAtIdleList != INVALID_VAL_16bit { // Failed leaf was in the idle list of spine
-		logrus.Debugf("[SpineBus] failed leaf was in idle list at index %d", indexAtIdleList)
-		rentry := bfrtclient.NewRegisterEntry(regIdleIdxMap, leafID, INVALID_VAL_16bit, nil) // write invalid val on the mapping reg
+	if added {
+		regIdleList := "pipe_spine.SpineIngress.idle_list"
+		rentry := bfrtclient.NewRegisterEntry(regIdleList, leafID, idleCount, nil) // write last element on new index
 		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
-			logrus.Fatalf("[SpineBus] Writing on register %s failed", regIdleIdxMap)
+			logrus.Fatalf("[SpineBus] Writing on register %s failed", regIdleList)
 		}
-		if indexAtIdleList < idleCount-1 { // Read Idle list and swap write the last element on the index of the recently failed leaf
-			// Read last idle list element
-			regIdleList := "pipe_spine.SpineIngress.idle_list"
-			lastElement, _ := bfrtclient.ReadRegister(ctx, regIdleList, idleCount-1)
-			rentry = bfrtclient.NewRegisterEntry(regIdleList, indexAtIdleList, lastElement, nil) // write last element on new index
+
+		idleCount += 1
+		rentry = bfrtclient.NewRegisterEntry(regIdleCount, vcID, idleCount, nil)
+	} else {
+		if indexAtIdleList != INVALID_VAL_16bit { // Failed leaf was in the idle list of spine
+			logrus.Debugf("[SpineBus] failed leaf was in idle list at index %d", indexAtIdleList)
+			rentry := bfrtclient.NewRegisterEntry(regIdleIdxMap, leafID, INVALID_VAL_16bit, nil) // write invalid val on the mapping reg
 			if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
-				logrus.Fatalf("[SpineBus] Writing on register %s failed", regIdleList)
+				logrus.Fatalf("[SpineBus] Writing on register %s failed", regIdleIdxMap)
 			}
+			if indexAtIdleList < idleCount-1 { // Read Idle list and swap write the last element on the index of the recently failed leaf
+				// Read last idle list element
+				regIdleList := "pipe_spine.SpineIngress.idle_list"
+				lastElement, _ := bfrtclient.ReadRegister(ctx, regIdleList, idleCount-1)
+				rentry = bfrtclient.NewRegisterEntry(regIdleList, indexAtIdleList, lastElement, nil) // write last element on new index
+				if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+					logrus.Fatalf("[SpineBus] Writing on register %s failed", regIdleList)
+				}
+			}
+			// Decrement idle count
+			rentry = bfrtclient.NewRegisterEntry(regIdleCount, vcID, uint64(math.Max(0, float64(idleCount-1))), nil)
 		}
-		// Decrement idle count
-		rentry = bfrtclient.NewRegisterEntry(regIdleCount, vcID, idleCount-1, nil)
 	}
 }
 
@@ -392,13 +458,13 @@ type ManagerCP interface {
 
 type LeafCP interface {
 	Init()
-	OnServerChange(*core.LeafHealthMsg)
+	OnServerChange([]*model.Node, bool)
 }
 
 type SpineCP interface {
 	Init()
 	InitRandomAdjustTables()
-	OnLeafChange(uint64, uint64)
+	OnLeafChange(uint64, uint64, bool)
 	MonitorStats()
 }
 
@@ -435,7 +501,7 @@ func NewFakeLeafCP(leaf *model.Node,
 func (cp *FakeLeafCP) Init() {
 	logrus.Infof("Initializing FakeLeafCP for Leaf %d", cp.leaf.ID)
 }
-func (cp *FakeLeafCP) OnServerChange(*core.LeafHealthMsg) {
+func (cp *FakeLeafCP) OnServerChange([]*model.Node, bool) {
 	logrus.Infof("Calling FakeLeafCP.OnServerChange for Leaf %d", cp.leaf.ID)
 }
 
@@ -457,7 +523,7 @@ func (cp *FakeSpineCP) Init() {
 func (cp *FakeSpineCP) InitRandomAdjustTables() {
 	logrus.Info("Calling FakeSpineCP.InitRandomAdjustTables")
 }
-func (cp *FakeSpineCP) OnLeafChange(uint64, uint64) {
+func (cp *FakeSpineCP) OnLeafChange(uint64, uint64, bool) {
 	logrus.Info("Calling FakeSpineCP.OnLeafChange")
 }
 
@@ -531,40 +597,13 @@ func (cp *BfrtLeafCP_V1) Init() {
 	LeafCPInitAllVer(ctx, cp.leaf, cp.client, cp.spines, cp.Topology)
 }
 
-func (cp *BfrtLeafCP_V1) OnServerChange(hmMsg *core.LeafHealthMsg) {
+func (cp *BfrtLeafCP_V1) OnServerChange(updated []*model.Node, added bool) {
 	logrus.Debugf("[LeafBus-%d] Updating tables after server changes", cp.leaf.ID)
 
 	ctx := context.Background()
 	bfrtclient := cp.client
-	OnServerChangeAllVer(ctx, cp.leaf, bfrtclient)
+	OnServerChangeAllVer(ctx, cp.leaf, updated, bfrtclient, added)
 
-	// Update server port mappings
-	table := "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
-	action := "LeafIngress.act_forward_saqr"
-	for _, server := range hmMsg.Updated {
-		for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
-			// Parham: Assumed e.ctrlID is 0-indexed and indicates virtual leaf ID?
-			index := uint16(cp.leaf.Index)*model.MAX_VCLUSTER_WORKERS + wid
-			// Table entries for worker index to port mappings
-			hw, err := net.ParseMAC(server.Address)
-			hw = append(make([]byte, 8-len(hw)), hw...)
-			mac_data := binary.BigEndian.Uint64(hw)
-			if err != nil {
-				logrus.Fatal(err)
-			}
-			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
-			k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(cp.leaf.Index))
-			ks := bfrtC.MakeKeys(k1, k2)
-			// d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
-			d1 := bfrtC.MakeBytesData("port", uint64(server.Port.GetDevPort()))
-			d2 := bfrtC.MakeBytesData("dst_mac", mac_data)
-			ds := bfrtC.MakeData(d1, d2)
-			err = updateOrInsert(ctx, "Leaf", bfrtclient, table, ks, action, ds)
-			if err != nil {
-				logrus.Fatal(err.Error())
-			}
-		}
-	}
 }
 
 type BfrtSpineCP_V1 struct {
@@ -691,10 +730,10 @@ func (cp *BfrtSpineCP_V1) InitRandomAdjustTables() {
 	logrus.Info("Calling BfrtSpineCP_V1.InitRandomAdjustTables")
 	ctx := context.Background()
 	bfrtclient := cp.client
-	for i := 1; i <= 3; i++ {
+	for i := 1; i <= 5; i++ {
 		table_ds := "pipe_spine.SpineIngress.adjust_random_range_sq_leafs"
 		keyValue := uint64(math.Pow(2, float64(i)))
-		action := fmt.Sprintf("SpineIngress.adjust_random_leaf_index_%d", keyValue)
+		action := fmt.Sprintf("SpineIngress.adjust_random_leaf_index_%d", i)
 		k_ds_1 := bfrtC.MakeExactKey("saqr_md.cluster_num_valid_queue_signals", keyValue)
 		k_ds := bfrtC.MakeKeys(k_ds_1)
 		// logrus.Debugf("i=%d, key=%d, action=%s", i, uint64(math.Pow(2, float64(i))), action)
@@ -706,21 +745,24 @@ func (cp *BfrtSpineCP_V1) InitRandomAdjustTables() {
 	}
 }
 
-func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64) {
+func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64, added bool) {
 	logrus.Info("Calling BfrtSpineCP_V1.OnLeafChange")
-	logrus.Debugf("[SpineBus-%d] Updating tables after leaf changes", cp.spine.ID)
+	logrus.Debugf("[SpineBus-%d] Updating tables after for leaf %d at index %d", cp.spine.ID, leafID, index)
 	spine := cp.spine
 	ctx := context.Background()
 	bfrtclient := cp.client
 	vcID := uint64(0)
 
-	SpineCPOnLeafChangeAllVer(ctx, bfrtclient, spine, leafID)
-
+	SpineCPOnLeafChangeAllVer(ctx, bfrtclient, spine, leafID, added)
+	childCount := len(spine.Children)
+	if childCount == 3 { // Parham: Temp: to-be-fixed
+		childCount = 4
+	}
 	// Decrement total number of available children
 	table := "pipe_spine.SpineIngress.get_cluster_num_valid_leafs"
 	action := "SpineIngress.act_get_cluster_num_valid_leafs"
 	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
-	d1 := bfrtC.MakeBytesData("num_leafs", uint64(len(spine.Children)))
+	d1 := bfrtC.MakeBytesData("num_leafs", uint64(childCount))
 	ks := bfrtC.MakeKeys(k1)
 	ds := bfrtC.MakeData(d1)
 	err := updateOrInsert(ctx, "Spine", bfrtclient, table, ks, action, ds)
@@ -731,11 +773,12 @@ func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64) {
 	// Copy and shift to left cell the queue len lists for every index i where i < falied leaf index
 	// Parham: We need to check since these are being modified by data plane it might be already updated by leaf and this move
 	// results in incorrect state until next queue signal arrives from the leaf
+	qlenList1 := "pipe_spine.SpineIngress.queue_len_list_1"
+	qlenList2 := "pipe_spine.SpineIngress.queue_len_list_2"
+	defList1 := "pipe_spine.SpineIngress.deferred_queue_len_list_1"
+	defList2 := "pipe_spine.SpineIngress.deferred_queue_len_list_2"
 	for i := int(index) + 1; i <= len(spine.Children); i++ {
-		qlenList1 := "pipe_spine.SpineIngress.queue_len_list_1"
-		qlenList2 := "pipe_spine.SpineIngress.queue_len_list_2"
-		defList1 := "pipe_spine.SpineIngress.deferred_queue_len_list_1"
-		defList2 := "pipe_spine.SpineIngress.deferred_queue_len_list_2"
+		
 
 		nextCellQlen, _ := bfrtclient.ReadRegister(ctx, qlenList1, uint64(i))
 		nextCellDrift, _ := bfrtclient.ReadRegister(ctx, defList1, uint64(i))
@@ -759,6 +802,28 @@ func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64) {
 			logrus.Fatalf("[SpineBus] Writing on register %s failed", defList2)
 		}
 	}
+
+	// new slot qlen 
+	if added {
+		rentry := bfrtclient.NewRegisterEntry(qlenList1, uint64(len(spine.Children)-1), uint64(0), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[SpineBus] Writing on register %s failed", qlenList1)
+		}
+		rentry = bfrtclient.NewRegisterEntry(qlenList2, uint64(len(spine.Children)-1), uint64(0), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[SpineBus] Writing on register %s failed", qlenList1)
+		}
+		rentry = bfrtclient.NewRegisterEntry(defList1, uint64(len(spine.Children)-1), uint64(0), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[SpineBus] Writing on register %s failed", qlenList1)
+		}
+		rentry = bfrtclient.NewRegisterEntry(defList2, uint64(len(spine.Children)-1), uint64(0), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[SpineBus] Writing on register %s failed", qlenList1)
+		}
+		
+	} 
+	
 
 	// Parham: Assuming leaf IDs stay the same after failure but leaf indices were updated accordingly
 	for _, leaf := range spine.Children {
@@ -896,6 +961,20 @@ func (cp *BfrtSpineCP_V2) MonitorStats() {
 		idle_element, _ := bfrtclient.ReadRegister(ctx, regIdleList, uint64(i))
 		logrus.Debugf("IdleList[%d] = %d: ", i, idle_element)
 	}
+	qlenList1 := "pipe_spine.SpineIngress.queue_len_list_1"
+	qlenList2 := "pipe_spine.SpineIngress.queue_len_list_2"
+	defList1 := "pipe_spine.SpineIngress.deferred_queue_len_list_1"
+	defList2 := "pipe_spine.SpineIngress.deferred_queue_len_list_2"
+	for i:= 0; i < 4; i++ {
+		val, _ := bfrtclient.ReadRegister(ctx, qlenList1, uint64(i))
+		logrus.Debugf("qlenList1[%d] = %d: ", i, val)
+		val, _ = bfrtclient.ReadRegister(ctx, qlenList2, uint64(i))
+		logrus.Debugf("qlenList2[%d] = %d: ", i, val)
+		val, _ = bfrtclient.ReadRegister(ctx, defList1, uint64(i))
+		logrus.Debugf("defList1[%d] = %d: ", i, val)
+		val, _ = bfrtclient.ReadRegister(ctx, defList2, uint64(i))
+		logrus.Debugf("defList2[%d] = %d: ", i, val)
+	}
 }
 
 func (cp *BfrtSpineCP_V1) MonitorStats() {
@@ -912,13 +991,27 @@ func (cp *BfrtSpineCP_V1) MonitorStats() {
 		idle_element, _ := bfrtclient.ReadRegister(ctx, regIdleList, uint64(i))
 		logrus.Debugf("IdleList[%d] = %d: ", i, idle_element)
 	}
+	qlenList1 := "pipe_spine.SpineIngress.queue_len_list_1"
+	qlenList2 := "pipe_spine.SpineIngress.queue_len_list_2"
+	defList1 := "pipe_spine.SpineIngress.deferred_queue_len_list_1"
+	defList2 := "pipe_spine.SpineIngress.deferred_queue_len_list_2"
+	for i:= 0; i < 4; i++ {
+		val, _ := bfrtclient.ReadRegister(ctx, qlenList1, uint64(i))
+		logrus.Debugf("qlenList1[%d] = %d: ", i, val)
+		val, _ = bfrtclient.ReadRegister(ctx, qlenList2, uint64(i))
+		logrus.Debugf("qlenList2[%d] = %d: ", i, val)
+		val, _ = bfrtclient.ReadRegister(ctx, defList1, uint64(i))
+		logrus.Debugf("defList1[%d] = %d: ", i, val)
+		val, _ = bfrtclient.ReadRegister(ctx, defList2, uint64(i))
+		logrus.Debugf("defList2[%d] = %d: ", i, val)
+	}
 }
 
 func (cp *FakeSpineCP) MonitorStats() {
 	// logrus.Debug("Fake monitor switch stats!")
 }
 
-func (cp *BfrtSpineCP_V2) OnLeafChange(leafID uint64, index uint64) {
+func (cp *BfrtSpineCP_V2) OnLeafChange(leafID uint64, index uint64, added bool) {
 	logrus.Info("Calling BfrtSpineCP_V1.OnLeafChange")
 	logrus.Debugf("[SpineBus-%d] Updating tables after leaf changes", cp.spine.ID)
 	spine := cp.spine
@@ -926,50 +1019,51 @@ func (cp *BfrtSpineCP_V2) OnLeafChange(leafID uint64, index uint64) {
 	bfrtclient := cp.client
 	vcID := uint64(0)
 
-	SpineCPOnLeafChangeAllVer(ctx, bfrtclient, spine, leafID)
+	SpineCPOnLeafChangeAllVer(ctx, bfrtclient, spine, leafID, added)
 
 	regID1 := "pipe_spine.SpineIngress.leaf_id_map_1"
 	regID2 := "pipe_spine.SpineIngress.leaf_id_map_2"
 	regQlen1 := "pipe_spine.SpineIngress.queue_len_list_low"
 	regQlen2 := "pipe_spine.SpineIngress.queue_len_list_high"
+	
+	if !added {
+		leafID1, _ := bfrtclient.ReadRegister(ctx, regID1, vcID)
+		leafID2, _ := bfrtclient.ReadRegister(ctx, regID2, vcID)
+		leafhighQlen, _ := bfrtclient.ReadRegister(ctx, regQlen2, vcID)
 
-	leafID1, _ := bfrtclient.ReadRegister(ctx, regID1, vcID)
-	leafID2, _ := bfrtclient.ReadRegister(ctx, regID2, vcID)
-	leafhighQlen, _ := bfrtclient.ReadRegister(ctx, regQlen2, vcID)
-
-	if leafID != leafID1 && leafID != leafID2 { // All good! no need to modify the qlen lists
-		return
-	}
-
-	if leafID1 == leafID { // failed leaf was being tracked as top leaf (min avg qlen)
-		// Write ID of previously second-best leaf (which is  alive and now is best child) on first ID reg
-		rentry := bfrtclient.NewRegisterEntry(regID1, vcID, leafID2, nil)
-		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
-			logrus.Fatalf("[SpineBus] Setting up register %s failed", regID1)
+		if leafID != leafID1 && leafID != leafID2 { // All good! no need to modify the qlen lists
+			return
 		}
-		// Write qlen of previously second-best leaf (which is  alive and now is best child)
-		rentry = bfrtclient.NewRegisterEntry(regQlen1, vcID, leafhighQlen, nil)
+
+		if leafID1 == leafID { // failed leaf was being tracked as top leaf (min avg qlen)
+			// Write ID of previously second-best leaf (which is  alive and now is best child) on first ID reg
+			rentry := bfrtclient.NewRegisterEntry(regID1, vcID, leafID2, nil)
+			if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+				logrus.Fatalf("[SpineBus] Setting up register %s failed", regID1)
+			}
+			// Write qlen of previously second-best leaf (which is  alive and now is best child)
+			rentry = bfrtclient.NewRegisterEntry(regQlen1, vcID, leafhighQlen, nil)
+			if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+				logrus.Fatalf("[SpineBus] Setting up register %s failed", regQlen2)
+			}
+		}
+
+		/*
+			 *  Cases1: workerID2 == leaf ID: Failed leaf was being tracked as second best leaf (2nd min avg qlen),
+				OR Case2: failed leaf was best leaf so we 2nd best to that position in the if-statement above
+			 * In both case: Should write a large qlen on the second best so it'll be replaced ba any better qlen
+		*/
+		rentry := bfrtclient.NewRegisterEntry(regQlen2, vcID, uint64(100), nil)
 		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
 			logrus.Fatalf("[SpineBus] Setting up register %s failed", regQlen2)
 		}
+		// Write ID of an (arbitrary) alive leaf so in the case that this one was selected before receiving a new qlen signal,
+		// the pkt won't be forwarded to the failed leaf
+		rentry = bfrtclient.NewRegisterEntry(regID2, vcID, uint64(spine.Children[0].ID), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[SpineBus] Setting up register %s failed", regID1)
+		}
 	}
-
-	/*
-		 *  Cases1: workerID2 == leaf ID: Failed leaf was being tracked as second best leaf (2nd min avg qlen),
-			OR Case2: failed leaf was best leaf so we 2nd best to that position in the if-statement above
-		 * In both case: Should write a large qlen on the second best so it'll be replaced ba any better qlen
-	*/
-	rentry := bfrtclient.NewRegisterEntry(regQlen2, vcID, uint64(100), nil)
-	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
-		logrus.Fatalf("[SpineBus] Setting up register %s failed", regQlen2)
-	}
-	// Write ID of an (arbitrary) alive leaf so in the case that this one was selected before receiving a new qlen signal,
-	// the pkt won't be forwarded to the failed leaf
-	rentry = bfrtclient.NewRegisterEntry(regID2, vcID, uint64(spine.Children[0].ID), nil)
-	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
-		logrus.Fatalf("[SpineBus] Setting up register %s failed", regID1)
-	}
-
 }
 
 type BfrtLeafCP_V2 struct {
@@ -1029,14 +1123,14 @@ func (cp *BfrtLeafCP_V2) Init() {
 	}
 }
 
-func (cp *BfrtLeafCP_V2) OnServerChange(hmMsg *core.LeafHealthMsg) {
+func (cp *BfrtLeafCP_V2) OnServerChange(updated []*model.Node, added bool) {
 	logrus.Debugf("[LeafBus-%d] Updating tables after server changes", cp.leaf.ID)
 
 	ctx := context.Background()
 	bfrtclient := cp.client
 	leaf := cp.leaf
 
-	OnServerChangeAllVer(ctx, leaf, bfrtclient)
+	OnServerChangeAllVer(ctx, leaf, updated, bfrtclient, added)
 
 	regID1 := "pipe_leaf.LeafIngress.worker_id_map_1"
 	regID2 := "pipe_leaf.LeafIngress.worker_id_map_2"
@@ -1045,29 +1139,31 @@ func (cp *BfrtLeafCP_V2) OnServerChange(hmMsg *core.LeafHealthMsg) {
 	// so it'll be replaced by any other qlen
 	//workerID1, _ := bfrtclient.ReadRegister(ctx, regID1, uint64(leaf.Index))
 	//workerID2, _ := bfrtclient.ReadRegister(ctx, regID2, uint64(leaf.Index))
+	if !added {
+		// Write ID of two (arbitrary) alive workers so the new tasks won't be forwarded to failed workers
+		rentry := bfrtclient.NewRegisterEntry(regID1, uint64(leaf.ID), uint64(leaf.Children[0].FirstWorkerID), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[LeafBus] Setting up register %s failed", regID1)
+		}
+		rentry = bfrtclient.NewRegisterEntry(regID2, uint64(leaf.ID), uint64(leaf.Children[len(leaf.Children)-1].LastWorkerID), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[LeafBus] Setting up register %s failed", regID1)
+		}
 
-	// Write ID of two (arbitrary) alive workers so the new tasks won't be forwarded to failed workers
-	rentry := bfrtclient.NewRegisterEntry(regID1, uint64(leaf.ID), uint64(leaf.Children[0].FirstWorkerID), nil)
-	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
-		logrus.Fatalf("[LeafBus] Setting up register %s failed", regID1)
+		// Write a large value on the tracked queue lengths so it will be replaced by other workers
+		regQlen1 := "pipe_leaf.LeafIngress.queue_len_list_low"
+		regQlen2 := "pipe_leaf.LeafIngress.queue_len_list_high"
+		rentry = bfrtclient.NewRegisterEntry(regQlen1, uint64(leaf.ID), uint64(100), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[LeafBus] Setting up register %s failed", regQlen1)
+		}
+		rentry = bfrtclient.NewRegisterEntry(regQlen2, uint64(leaf.ID), uint64(100), nil)
+		if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+			logrus.Fatalf("[LeafBus] Setting up register %s failed", regQlen2)
+		}
 	}
-	rentry = bfrtclient.NewRegisterEntry(regID2, uint64(leaf.ID), uint64(leaf.Children[len(leaf.Children)-1].LastWorkerID), nil)
-	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
-		logrus.Fatalf("[LeafBus] Setting up register %s failed", regID1)
-	}
-
-	// Write a large value on the tracked queue lengths so it will be replaced by other workers
-	regQlen1 := "pipe_leaf.LeafIngress.queue_len_list_low"
-	regQlen2 := "pipe_leaf.LeafIngress.queue_len_list_high"
-	rentry = bfrtclient.NewRegisterEntry(regQlen1, uint64(leaf.ID), uint64(100), nil)
-	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
-		logrus.Fatalf("[LeafBus] Setting up register %s failed", regQlen1)
-	}
-	rentry = bfrtclient.NewRegisterEntry(regQlen2, uint64(leaf.ID), uint64(100), nil)
-	if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
-		logrus.Fatalf("[LeafBus] Setting up register %s failed", regQlen2)
-	}
-}
+} 
+	
 
 type BfrtManagerCP_V2 struct {
 	client *bfrtC.Client

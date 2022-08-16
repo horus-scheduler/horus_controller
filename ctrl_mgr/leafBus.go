@@ -110,6 +110,10 @@ func (e *LeafBus) processIngress() {
 			go func() {
 				logrus.Debugf("[LeafBus-%d] Sending update pkt to server %d", e.ctrlID, message.Server.Id)
 				e.topology.Debug()
+				var temp[] *model.Node
+				serverNode := e.topology.GetNode(uint16(message.Server.Id), model.NodeType_Server)
+				temp = append(temp, serverNode)
+				e.cp.OnServerChange(temp, true)
 			}()
 
 		// Message about a new added VC from the RPC
@@ -131,7 +135,10 @@ func (e *LeafBus) processIngress() {
 				// src & dst IPs, src ID, cluster ID, pkt type
 				leaf := e.topology.GetNode(e.ctrlID, model.NodeType_Leaf)
 				if leaf != nil {
-					e.cp.OnServerChange(hmMsg)
+					logrus.Debugf("[LeafBus-%d] Calling cp.onserverchange", e.ctrlID)
+					e.cp.OnServerChange(hmMsg.Updated, false)
+				} else {
+					logrus.Warn("LeafBus: leaf was nil!")
 				}
 				for _, server := range hmMsg.Updated {
 					logrus.Debugf("[LeafBus-%d] Sending update pkt to server %d", e.ctrlID, server.ID)

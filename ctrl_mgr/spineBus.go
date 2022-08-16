@@ -86,8 +86,8 @@ func (bus *SpineBus) processIngress() {
 					bus.ctrlID, message.Leaf.Id, message.Leaf.Index)
 				if bus.topology != nil {
 					bus.topology.Debug()
+					bus.cp.OnLeafChange(uint64(message.Leaf.Id), uint64(message.Leaf.Index), true)
 				}
-				bus.cp.OnLeafChange(uint64(message.Leaf.Id), uint64(message.Leaf.Index))
 			}()
 		case message := <-bus.rpcFailedServers:
 			// TODO: receives a msg that a server had failed
@@ -107,6 +107,7 @@ func (bus *SpineBus) processIngress() {
 					message.Leaf.Id,
 					message.Leaf.Index)
 				if bus.topology != nil {
+					bus.cp.OnLeafChange(uint64(message.Leaf.Id), uint64(message.Leaf.Index), false)
 					bus.topology.Debug()
 				}
 			}()

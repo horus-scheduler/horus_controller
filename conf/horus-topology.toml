@@ -6,7 +6,7 @@
         deviceId = 0
         pipeId = 65535
         ctrlAddress = "0.0.0.0:50052"
-        ctrlAPI = "fake" # Options: "fake" | "bfrt"
+        ctrlAPI = "bfrt" # Options: "fake" | "bfrt"
 
 [ports]
     # IMPORTNT NOTES: 
@@ -102,7 +102,7 @@
         index = 3
         address = "0.0.0.0:6004"
         mgmtAddress = "0.0.0.0:7001"
-        servers = [3, 4] # order matters
+        servers = [3] # order matters
         # switch-specific values
         asic = "tofino"
         us_port = "29/0" # from leaf->spine
@@ -137,8 +137,8 @@
         workers_count = 8
 
     #cs-nsl-ramses
-    [[topology.servers]]
-        id = 4
-        port = "3/2" # server<->leaf
-        address = "F8:F2:1E:13:CA:FC"
-        workers_count = 8
+    #[[topology.servers]]
+    #    id = 4
+    #    port = "3/2" # server<->leaf
+    #    address = "F8:F2:1E:13:CA:FC"
+    #    workers_count = 8
