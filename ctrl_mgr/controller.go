@@ -277,6 +277,8 @@ func (c *leafController) Shutdown() {
 	c.bus.DoneChan <- true
 	c.healthMgr.DoneChan <- true
 	c.rpcEndPoint.DoneChan <- true
+	// Calls the cleanup function for the emulated leaf and sends idleRemove pkt to the spine
+	c.bus.Shutdown()
 	close(c.asicEgress)
 	close(c.asicIngress)
 	close(c.bus.hmMsg)

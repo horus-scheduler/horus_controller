@@ -15,6 +15,8 @@ const (
 	HORUS_UDP_PORT layers.UDPPort = 1234
 
 	// Pkt types
+	PKT_TYPE_IDLE_SIGNAL   byte = 0x06
+	PKT_TYPE_IDLE_REMOVE   byte = 0x0A
 	PKT_TYPE_KEEP_ALIVE    byte = 0x0B
 	PKT_TYPE_WORKER_ID     byte = 0x0C
 	PKT_TYPE_WORKER_ID_ACK byte = 0x0D

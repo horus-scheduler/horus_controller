@@ -23,6 +23,7 @@ type SpineBusChan struct {
 	// ASIC channels
 	asicIngress chan []byte // recv-from the ASIC
 	asicEgress  chan []byte // send-to the ASIC
+
 }
 
 // NewSpineBusChan ...
@@ -55,6 +56,8 @@ type SpineBus struct {
 	healthMgr *core.LeafHealthManager
 	cp        SpineCP
 	doneChan  chan bool
+	// Map to store pending leaves to be added (in case leaf has no children)
+	pending_leaves map[uint16]int
 }
 
 // NewSpineBus ...
@@ -65,13 +68,14 @@ func NewSpineBus(ctrlID uint16,
 	healthMgr *core.LeafHealthManager,
 	cp SpineCP) *SpineBus {
 	return &SpineBus{
-		SpineBusChan: busChan,
-		ctrlID:       ctrlID,
-		topology:     topology,
-		vcm:          vcm,
-		healthMgr:    healthMgr,
-		cp:           cp,
-		doneChan:     make(chan bool, 1),
+		SpineBusChan:   busChan,
+		ctrlID:         ctrlID,
+		topology:       topology,
+		vcm:            vcm,
+		healthMgr:      healthMgr,
+		cp:             cp,
+		doneChan:       make(chan bool, 1),
+		pending_leaves: make(map[uint16]int),
 	}
 }
 
@@ -86,7 +90,7 @@ func (bus *SpineBus) processIngress() {
 					bus.ctrlID, message.Leaf.Id, message.Leaf.Index)
 				if bus.topology != nil {
 					bus.topology.Debug()
-					bus.cp.OnLeafChange(uint64(message.Leaf.Id), uint64(message.Leaf.Index), true)
+					bus.cp.OnLeafChange(uint64(message.Leaf.Id), uint64(message.Leaf.Index), false)
 				}
 			}()
 		case message := <-bus.rpcFailedServers:
@@ -107,9 +111,16 @@ func (bus *SpineBus) processIngress() {
 					message.Leaf.Id,
 					message.Leaf.Index)
 				if bus.topology != nil {
-					bus.cp.OnLeafChange(uint64(message.Leaf.Id), uint64(message.Leaf.Index), false)
+					leaf := bus.topology.GetNode(uint16(message.Leaf.Id), model.NodeType_Leaf)
+					if len(leaf.Children) > 0 { // Add the new leaf
+						bus.cp.OnLeafChange(uint64(message.Leaf.Id), uint64(message.Leaf.Index), true)
+					} else { // Will be added later
+						logrus.Debugf("[SpineBus-%d] Leaf has no children, will be added once workers added leafID", bus.ctrlID)
+						bus.pending_leaves[uint16(message.Leaf.Id)] = 1
+					}
 					bus.topology.Debug()
 				}
+
 			}()
 		case message := <-bus.newServers:
 			// TODO: receives a msg that a server was added
@@ -117,6 +128,16 @@ func (bus *SpineBus) processIngress() {
 			go func() {
 				logrus.Debugf("[SpineBus-%d] Using BfRt Client to add server-related DP info at spine; serverID = %d", bus.ctrlID, message.Server.Id)
 				if bus.topology != nil {
+					server := bus.topology.GetNode(uint16(message.Server.Id), model.NodeType_Server)
+					if bus.pending_leaves[server.Parent.ID] != 0 {
+						// Parent leaf add msg have been received but havent' actually added yet, takes effect now
+						logrus.Debugf("[SpineBus-%d] New server added to previously empty leaf, adding leaf now; ServerID= %d, LeafID= %d",
+							bus.ctrlID,
+							message.Server.Id,
+							server.Parent.ID)
+						bus.cp.OnLeafChange(uint64(server.Parent.ID), uint64(server.Parent.Index), true)
+						delete(bus.pending_leaves, server.Parent.ID)
+					}
 					bus.topology.Debug()
 				}
 			}()

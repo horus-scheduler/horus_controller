@@ -136,6 +136,7 @@ func (cp *BfrtCentralizedCP) TakePortDown(port *model.Port) error {
 	if client, ok := cp.clientMap.load(port.Asic.ID); ok {
 		return client.DisablePort(uint32(port.GetDevPort()))
 	}
+	logrus.Infof("Port: %s is DOWN", port.Spec.ID)
 	return errors.New("bfrt client was not found during disabling the port")
 }
 

@@ -109,11 +109,27 @@ func (e *LeafBus) processIngress() {
 		case message := <-e.newServersRPC:
 			go func() {
 				logrus.Debugf("[LeafBus-%d] Sending update pkt to server %d", e.ctrlID, message.Server.Id)
-				e.topology.Debug()
-				var temp[] *model.Node
+				var temp []*model.Node
 				serverNode := e.topology.GetNode(uint16(message.Server.Id), model.NodeType_Server)
 				temp = append(temp, serverNode)
 				e.cp.OnServerChange(temp, true)
+				e.topology.Debug()
+				horusPkt := &horus_net.HorusPacket { // Parham: Each time new server added to leaf, send idle signal pkt to spine (rack now has some idle workers)
+						PktType:    horus_net.PKT_TYPE_IDLE_SIGNAL,
+						ClusterID:  0,
+						QLen:       0,
+						SrcID:      e.ctrlID,
+						DstID:      100,
+						SeqNum:     0,
+						RestOfData: []byte{0x00},
+				}
+				pktBytes, err := horus_net.CreateFullHorusPacket(horusPkt,
+					net.IP{1, 1, 1, 1},
+					net.IP{2, 2, 2, 2})
+				logrus.Debug(pktBytes)
+				if err == nil {
+					e.asicEgress <- pktBytes
+				}
 			}()
 
 		// Message about a new added VC from the RPC
@@ -142,7 +158,7 @@ func (e *LeafBus) processIngress() {
 				}
 				for _, server := range hmMsg.Updated {
 					logrus.Debugf("[LeafBus-%d] Sending update pkt to server %d", e.ctrlID, server.ID)
-					firstDstId := uint16(leaf.Index) * model.MAX_VCLUSTER_WORKERS + server.FirstWorkerID
+					firstDstId := uint16(leaf.Index)*model.MAX_VCLUSTER_WORKERS + server.FirstWorkerID
 					horusPkt := &horus_net.HorusPacket{
 						PktType:    horus_net.PKT_TYPE_WORKER_ID,
 						ClusterID:  leaf.Index,
@@ -196,6 +212,29 @@ func (e *LeafBus) processIngress() {
 	}
 }
 
+func (e *LeafBus) Shutdown() {
+	/* 
+	 * Parham: We need to send idle remove pkt to spine from *spineBus*, but in our testbed spine has no access to CPU port,
+	 * as a workaround added here to send from another leaf (**always leaf 0**) to spine. 
+	*/
+	horusPkt := &horus_net.HorusPacket { 
+			PktType:    horus_net.PKT_TYPE_IDLE_REMOVE,
+			ClusterID:  0,
+			QLen:       0,
+			SrcID:      e.ctrlID,
+			DstID:      100,
+			SeqNum:     0,
+			RestOfData: []byte{0x00},
+	}
+	pktBytes, err := horus_net.CreateFullHorusPacket(horusPkt,
+		net.IP{1, 1, 1, 1},
+		net.IP{2, 2, 2, 2})
+	logrus.Debug(pktBytes)
+	if err == nil {
+		e.asicEgress <- pktBytes
+	}
+	e.cp.Cleanup(e.ctrlID)
+}
 func (e *LeafBus) initialize() {
 	logrus.Infof("[LeafBus-%d] Running initialization logic", e.ctrlID)
 	e.topology.Debug()
