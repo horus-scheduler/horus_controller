@@ -1,6 +1,7 @@
 package ctrl_mgr
 
 import (
+	"time"
 	"github.com/horus-scheduler/horus_controller/core"
 	"github.com/horus-scheduler/horus_controller/core/model"
 	horus_net "github.com/horus-scheduler/horus_controller/core/net"
@@ -80,6 +81,7 @@ func NewSpineBus(ctrlID uint16,
 }
 
 func (bus *SpineBus) processIngress() {
+	t_last_read := time.Now()
 	for {
 		select {
 		case message := <-bus.rpcFailedLeaves:
@@ -155,7 +157,11 @@ func (bus *SpineBus) processIngress() {
 			}()
 
 		default:
-			bus.cp.MonitorStats()
+			elapsed := time.Since(t_last_read).Seconds()
+			if elapsed >= 10 {
+				bus.cp.MonitorStats()
+				t_last_read = time.Now()	
+			}
 		}
 	}
 }

@@ -1,4 +1,4 @@
-# Topology config used for Multi-rack experiments with uniform worker distribution between the racks
+# Topology config used for single-rack experiments
 # All the available ASICs in the DC
 [asics]
     [[asics.asic]]
@@ -50,22 +50,28 @@
 
 [topology]
     # Applications sending tasks and receiving their results
-    # RocksDB client ID
+    # RocksDB client ID (nsl-62)
     [[topology.clients]]
         id = 110
         asic = "tofino"
         port = "9/0" # client <-> spine
     
-    # TPC-C client ID
+    # TPC-C client ID 1 (nsl-62)
     [[topology.clients]]
         id = 150
         asic = "tofino"
         port = "9/0" # client <-> spine
+    
+    # TPC-C client ID 2 (nsl-42)
+    [[topology.clients]]
+        id = 250
+        asic = "tofino"
+        port = "9/2" # client <-> spine
 
     [[topology.spines]]
         id = 100
         address = "0.0.0.0:5001"
-        leaves = [0, 1, 2, 3]
+        leaves = [0]
         asic = "tofino"
 
     [[topology.leaves]]
@@ -74,48 +80,12 @@
         index = 0
         address = "0.0.0.0:6001"
         mgmtAddress = "0.0.0.0:7001"
-        servers = [0] # order matters
+        servers = [0, 1, 2, 3] # order matters
         # switch-specific values
         asic = "tofino"
         us_port = "27/0" # from leaf->spine
         ds_port = "21/0" # from spine->leaf
-
-    [[topology.leaves]]
-        # horus-specific values
-        id = 1
-        index = 1
-        address = "0.0.0.0:6002"
-        mgmtAddress = "0.0.0.0:7001"
-        servers = [1] # order matters
-        # switch-specific values
-        asic = "tofino"
-        us_port = "28/0" # from leaf->spine
-        ds_port = "22/0" # from spine->leaf
-        
-    [[topology.leaves]]
-        # horus-specific values
-        id = 2
-        index = 2
-        address = "0.0.0.0:6003"
-        mgmtAddress = "0.0.0.0:7001"
-        servers = [2] # order matters
-        # switch-specific values
-        asic = "tofino"
-        us_port = "25/0" # from leaf->spine
-        ds_port = "19/0" # from spine->leaf
-
-    [[topology.leaves]]
-        # horus-specific values
-        id = 3
-        index = 3
-        address = "0.0.0.0:6004"
-        mgmtAddress = "0.0.0.0:7001"
-        servers = [3] # order matters
-        # switch-specific values
-        asic = "tofino"
-        us_port = "29/0" # from leaf->spine
-        ds_port = "23/0" # from spine->leaf
-
+    
     #cs-nsl-55
     [[topology.servers]]
         id = 0
@@ -144,9 +114,3 @@
         address = "F8:F2:1E:3A:07:24"
         workers_count = 8
 
-    #cs-nsl-ramses
-    #[[topology.servers]]
-    #    id = 4
-    #    port = "3/2" # server<->leaf
-    #    address = "F8:F2:1E:13:CA:FC"
-    #    workers_count = 8

@@ -74,10 +74,12 @@ func LeafCPInitAllVer(ctx context.Context,
 
 	// Insert idle_list values (wid of idle workers) and table entries for wid to port mapping
 	reg := "pipe_leaf.LeafIngress.idle_list"
-	table := "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
-	action := "LeafIngress.act_forward_saqr"
+	table := "pipe_leaf.LeafIngress.forward_horus_switch_dst"
+	action := "LeafIngress.act_forward_horus"
+	logrus.Debugf("[Leaf-%d] #children=%d", leaf.ID,  len(leaf.Children))
 	for _, server := range leaf.Children {
 		// Parham: Check this line seems redundant, how can we access the worker count of server
+		logrus.Debugf("[Leaf-%d] leafID %d, server %d first-wid=%d, last-wid=%d", leafIdx, leaf.ID, server.ID, server.FirstWorkerID, server.LastWorkerID)
 		worker_count += server.LastWorkerID - server.FirstWorkerID + 1
 		for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
 			index := leaf.ID*model.MAX_VCLUSTER_WORKERS + wid
@@ -99,8 +101,8 @@ func LeafCPInitAllVer(ctx context.Context,
 			if err != nil {
 				logrus.Fatal(err)
 			}
-			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
-			k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.ID))
+			k1 := bfrtC.MakeExactKey("hdr.horus.dst_id", uint64(index))
+			k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
 			ks := bfrtC.MakeKeys(k1, k2)
 			// Khaled: Check PortId -> UsPort.GetDevPort()
 			// d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
@@ -141,10 +143,10 @@ func LeafCPInitAllVer(ctx context.Context,
 		//	logrus.Fatal(entry)
 		//}
 
-		table = "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
-		action = "LeafIngress.act_forward_saqr"
-		k1 = bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(uid))
-		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.Index))
+		table = "pipe_leaf.LeafIngress.forward_horus_switch_dst"
+		action = "LeafIngress.act_forward_horus"
+		k1 = bfrtC.MakeExactKey("hdr.horus.dst_id", uint64(uid))
+		k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.Index))
 		ks = bfrtC.MakeKeys(k1, k2)
 		usPort := leaf.UsPort.GetDevPort()
 		d1 := bfrtC.MakeBytesData("port", usPort)
@@ -164,12 +166,19 @@ func LeafCPInitAllVer(ctx context.Context,
 		logrus.Fatalf("[Leaf] Setting up register %s failed", reg)
 	}
 
+	// New idleRemove approach
+	// reg = "pipe_leaf.LeafIngress.linked_iq_index"
+	// rentry = bfrtclient.NewRegisterEntry(reg, uint64(leaf.ID), uint64(leafIdx), nil)
+	// if err := bfrtclient.InsertTableEntry(ctx, rentry); err != nil {
+	// 	logrus.Fatalf("[Leaf] Setting up register %s failed", reg)
+	// }
+
 	// Table entires for #available workers and #available spine schedulers
 	// Khaled: This should be per VC?
 	num_spines := int(math.Max(float64(len(spines)), 2))
 	table = "pipe_leaf.LeafIngress.get_cluster_num_valid"
 	action = "LeafIngress.act_get_cluster_num_valid"
-	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.ID))
+	k1 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
 	d1 := bfrtC.MakeBytesData("num_ds_elements", uint64(worker_count))
 	// Assumption in P4: minimum two spines (one random bit 0|1)
 	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(num_spines))
@@ -185,8 +194,8 @@ func LeafCPInitAllVer(ctx context.Context,
 	action = "LeafIngress.act_get_spine_dst_id"
 
 	for spine_idx := 0; spine_idx < num_spines; spine_idx++ {
-		k1 := bfrtC.MakeExactKey("saqr_md.random_id_1", uint64(spine_idx))
-		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.ID))
+		k1 := bfrtC.MakeExactKey("horus_md.random_id_1", uint64(spine_idx))
+		k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
 		ks := bfrtC.MakeKeys(k1, k2)
 		// Both will have the same spine ID (at index 0) in our testbed (one spine only)
 		d1 := bfrtC.MakeBytesData("spine_dst_id", uint64(spines[0].ID))
@@ -201,7 +210,7 @@ func LeafCPInitAllVer(ctx context.Context,
 	qlen_unit := model.WorkerQlenUnitMap[worker_count]
 	table = "pipe_leaf.LeafIngress.set_queue_len_unit"
 	action = "LeafIngress.act_set_queue_len_unit"
-	k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.ID))
+	k1 = bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
 	d1 = bfrtC.MakeBytesData("cluster_unit", uint64(qlen_unit))
 	ks = bfrtC.MakeKeys(k1)
 	ds = bfrtC.MakeData(d1)
@@ -235,7 +244,7 @@ func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, updated []*mode
 	table := "pipe_leaf.LeafIngress.get_cluster_num_valid"
 	action := "LeafIngress.act_get_cluster_num_valid"
 	// Parham: Assumed e.ctrlID is 0-indexed and indicates virtual leaf ID?
-	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.ID))
+	k1 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
 	d1 := bfrtC.MakeBytesData("num_ds_elements", uint64(worker_count))
 	// Parham: How can we access number of spines avilable (random linkage for idle count),
 	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(2)) // put constant here works in our testbed but should be modified
@@ -250,7 +259,7 @@ func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, updated []*mode
 	qlen_unit, _ := model.WorkerQlenUnitMap[worker_count]
 	table = "pipe_leaf.LeafIngress.set_queue_len_unit"
 	action = "LeafIngress.act_set_queue_len_unit"
-	k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.ID))
+	k1 = bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
 	d1 = bfrtC.MakeBytesData("cluster_unit", uint64(qlen_unit))
 	ks = bfrtC.MakeKeys(k1)
 	ds = bfrtC.MakeData(d1)
@@ -260,8 +269,8 @@ func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, updated []*mode
 	}
 
 	// Update server port mappings
-	table = "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
-	action = "LeafIngress.act_forward_saqr"
+	table = "pipe_leaf.LeafIngress.forward_horus_switch_dst"
+	action = "LeafIngress.act_forward_horus"
 	for _, server := range updated {
 		for wid := server.FirstWorkerID; wid <= server.LastWorkerID; wid++ {
 			// Parham: Assumed e.ctrlID is 0-indexed and indicates virtual leaf ID?
@@ -273,8 +282,8 @@ func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, updated []*mode
 			if err != nil {
 				logrus.Fatal(err)
 			}
-			k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(index))
-			k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", uint64(leaf.ID))
+			k1 := bfrtC.MakeExactKey("hdr.horus.dst_id", uint64(index))
+			k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
 			ks := bfrtC.MakeKeys(k1, k2)
 			// d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
 			d1 := bfrtC.MakeBytesData("port", uint64(server.Port.GetDevPort()))
@@ -316,9 +325,9 @@ func ManagerInitAllVer(ctx context.Context, bfrtclient *bfrtC.Client) {
 	logrus.Debugf("[Manager] Setting up common leaf table entries for all emulated leaves")
 
 	// // Table entry for CPU port
-	// table := "pipe_leaf.LeafIngress.forward_saqr_switch_dst"
-	// action := "LeafIngress.act_forward_saqr"
-	// k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(model.CPU_PORT_ID))
+	// table := "pipe_leaf.LeafIngress.forward_horus_switch_dst"
+	// action := "LeafIngress.act_forward_horus"
+	// k1 := bfrtC.MakeExactKey("hdr.horus.dst_id", uint64(model.CPU_PORT_ID))
 	// ks := bfrtC.MakeKeys(k1)
 	// d1 := bfrtC.MakeBytesData("port", uint64(model.CPU_PORT_ID))
 	// d2 := bfrtC.MakeBytesData("dst_mac", uint64(1000)) // Dummy
@@ -358,9 +367,9 @@ func SpineCPInitAllVer(ctx context.Context,
 		}
 
 		// Leaf port mapping
-		table := "pipe_spine.SpineIngress.forward_saqr_switch_dst"
-		action := "SpineIngress.act_forward_saqr"
-		k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(leaf.ID))
+		table := "pipe_spine.SpineIngress.forward_horus_switch_dst"
+		action := "SpineIngress.act_forward_horus"
+		k1 := bfrtC.MakeExactKey("hdr.horus.dst_id", uint64(leaf.ID))
 		// Khaled: Check PortId -> DsPort.GetDevPort()
 		// d1 := bfrtC.MakeBytesData("port", uint64(leaf.PortId))
 		d1 := bfrtC.MakeBytesData("port", uint64(leaf.DsPort.GetDevPort()))
@@ -384,9 +393,9 @@ func SpineCPInitAllVer(ctx context.Context,
 	for _, client := range topology.Clients.Internal() {
 		key := client.ID
 		value := client.Port.GetDevPort()
-		table := "pipe_spine.SpineIngress.forward_saqr_switch_dst"
-		action := "SpineIngress.act_forward_saqr"
-		k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(key))
+		table := "pipe_spine.SpineIngress.forward_horus_switch_dst"
+		action := "SpineIngress.act_forward_horus"
+		k1 := bfrtC.MakeExactKey("hdr.horus.dst_id", uint64(key))
 		d1 := bfrtC.MakeBytesData("port", uint64(value))
 		ks := bfrtC.MakeKeys(k1)
 		ds := bfrtC.MakeData(d1)
@@ -438,9 +447,9 @@ func SpineCPOnLeafChangeAllVer(ctx context.Context,
 		// }
 		// Add Leaf port mapping
 		leaf := topology.GetNode(uint16(leafID), model.NodeType_Leaf)
-		table := "pipe_spine.SpineIngress.forward_saqr_switch_dst"
-		action := "SpineIngress.act_forward_saqr"
-		k1 := bfrtC.MakeExactKey("hdr.saqr.dst_id", uint64(leafID))
+		table := "pipe_spine.SpineIngress.forward_horus_switch_dst"
+		action := "SpineIngress.act_forward_horus"
+		k1 := bfrtC.MakeExactKey("hdr.horus.dst_id", uint64(leafID))
 		// Khaled: Check PortId -> DsPort.GetDevPort()
 		d1 := bfrtC.MakeBytesData("port", uint64(leaf.DsPort.GetDevPort()))
 		ks := bfrtC.MakeKeys(k1)
@@ -484,6 +493,7 @@ func SpineCPOnLeafChangeAllVer(ctx context.Context,
 type ManagerCP interface {
 	Init()
 	InitRandomAdjustTables()
+	MonitorStats()
 }
 
 type LeafCP interface {
@@ -511,6 +521,13 @@ func (cp *FakeManagerCP) Init() {
 }
 func (cp *FakeManagerCP) InitRandomAdjustTables() {
 	logrus.Info("Calling FakeManagerCP.InitRandomAdjustTables")
+}
+func (cp *FakeManagerCP) MonitorStats() {
+	logrus.Info("Calling FakeManagerCP.MonitorStats")	
+}
+
+func (cp *BfrtManagerCP_V2) MonitorStats() {
+	logrus.Info("Calling BfrtManagerCP_V2.MonitorStats")	
 }
 
 type FakeLeafCP struct {
@@ -577,6 +594,43 @@ func (cp *BfrtManagerCP_V1) Init() {
 	cp.InitRandomAdjustTables()
 }
 
+func (cp *BfrtManagerCP_V1) MonitorStats() {
+	ctx := context.Background()
+	bfrtclient := cp.client
+
+	totalResubLeaf := uint64(0)
+    totalMsgLoad := uint64(0)
+    totalMsgIdle := uint64(0)
+    //aggQlen := uint64(0)
+    regResubCount := "pipe_leaf.LeafIngress.stat_count_resub"
+    regLoadSignalCount := "pipe_leaf.LeafIngress.stat_count_load_signal"
+    regIdleSignalCount := "pipe_leaf.LeafIngress.stat_count_idle_signal"
+    regTaskCount := "pipe_leaf.LeafIngress.stat_count_task"
+    // regAggQlen := "pipe_leaf.LeafIngress.aggregate_queue_len_list"
+
+    // Parham: Just quickly added this, manager has no access to topology, for-loop should be in range of #Emulated Leaves
+	for i:=0; i < 4; i++ {
+		val, _ := bfrtclient.ReadRegister(ctx, regResubCount, uint64(i))
+		totalResubLeaf += val
+		
+		val, _ = bfrtclient.ReadRegister(ctx, regLoadSignalCount, uint64(i))
+		totalMsgLoad += val
+		
+		val, _ = bfrtclient.ReadRegister(ctx, regIdleSignalCount, uint64(i))
+		totalMsgIdle += val
+		logrus.Infof("Idle messages[%d]: %d", i, val)
+		//aggQlen, _ = bfrtclient.ReadRegister(ctx, regAggQlen, uint64(i))
+		//logrus.Infof("AggQlen Leaf[%d] = %d", i, aggQlen)
+	}
+	totaTaskCount,_ := bfrtclient.ReadRegister(ctx, regTaskCount, 0)
+	
+	logrus.Infof("Total tasks arrived at Leaf: %d", totaTaskCount)
+	logrus.Infof("Leaf Total Resubmission: %d", totalResubLeaf)
+	logrus.Infof("Total Msgs for Load Signals: %d", totalMsgLoad)
+	logrus.Infof("Total Msgs for Idle Signals: %d", totalMsgIdle)
+	logrus.Infof("Sum Total State Update Msgs: %d", totalMsgLoad+totalMsgIdle)
+}
+
 func (cp *BfrtManagerCP_V1) InitRandomAdjustTables() {
 	logrus.Info("Calling BfrtManagerCP.InitRandomAdjustTables")
 	bfrtclient := cp.client
@@ -584,14 +638,14 @@ func (cp *BfrtManagerCP_V1) InitRandomAdjustTables() {
 	for i := 1; i <= 5; i++ {
 		table_ds := "pipe_leaf.LeafIngress.adjust_random_range_ds"
 		action := fmt.Sprintf("LeafIngress.adjust_random_worker_range_%d", i)
-		k_ds_1 := bfrtC.MakeExactKey("saqr_md.cluster_num_valid_ds", uint64(math.Pow(2, float64(i))))
+		k_ds_1 := bfrtC.MakeExactKey("horus_md.cluster_num_valid_ds", uint64(math.Pow(2, float64(i))))
 		k_ds := bfrtC.MakeKeys(k_ds_1)
 		entry_ds := bfrtclient.NewTableEntry(table_ds, k_ds, action, nil, nil) // Parham: works with nil data?
 		if err := bfrtclient.InsertTableEntry(ctx, entry_ds); err != nil {
 			logrus.Fatal(entry_ds)
 		}
 		table_us := "pipe_leaf.LeafIngress.adjust_random_range_us"
-		k_us_1 := bfrtC.MakeExactKey("saqr_md.cluster_num_valid_us", uint64(math.Pow(2, float64(i))))
+		k_us_1 := bfrtC.MakeExactKey("horus_md.cluster_num_valid_us", uint64(math.Pow(2, float64(i))))
 		k_us := bfrtC.MakeKeys(k_us_1)
 		entry_us := bfrtclient.NewTableEntry(table_us, k_us, action, nil, nil) // Parham: works with nil data?
 		if err := bfrtclient.InsertTableEntry(ctx, entry_us); err != nil {
@@ -725,8 +779,8 @@ func (cp *BfrtSpineCP_V1) Init() {
 		// LeafId -> qlen_unit mapping (two tables since we have two samples)
 		table := "pipe_spine.SpineIngress.set_queue_len_unit_1"
 		action := "SpineIngress.act_set_queue_len_unit_1"
-		k1 := bfrtC.MakeExactKey("saqr_md.random_id_1", uint64(leaf.ID))
-		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		k1 := bfrtC.MakeExactKey("horus_md.random_id_1", uint64(leaf.ID))
+		k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
 		d1 := bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
 		ks := bfrtC.MakeKeys(k1, k2)
 		ds := bfrtC.MakeData(d1)
@@ -738,8 +792,21 @@ func (cp *BfrtSpineCP_V1) Init() {
 
 		table = "pipe_spine.SpineIngress.set_queue_len_unit_2"
 		action = "SpineIngress.act_set_queue_len_unit_2"
-		k1 = bfrtC.MakeExactKey("saqr_md.random_id_2", uint64(leaf.ID))
-		k2 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		k1 = bfrtC.MakeExactKey("horus_md.random_id_2", uint64(leaf.ID))
+		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		d1 = bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
+		ks = bfrtC.MakeKeys(k1, k2)
+		ds = bfrtC.MakeData(d1)
+		entry = bfrtclient.NewTableEntry(table, ks, action, ds, nil)
+		if err := bfrtclient.InsertTableEntry(ctx, entry); err != nil {
+			logrus.Errorf("[Spine] Setting up table %s failed", table)
+			logrus.Fatal(entry)
+		}
+
+		table = "pipe_spine.SpineIngress.set_queue_len_unit_resub"
+		action = "SpineIngress.act_set_queue_len_unit_resub"
+		k1 = bfrtC.MakeExactKey("horus_md.selected_ds_index", uint64(leaf.ID))
+		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
 		d1 = bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -752,8 +819,8 @@ func (cp *BfrtSpineCP_V1) Init() {
 		// index (of qlen list) -> leafID mapping
 		table = "pipe_spine.SpineIngress.get_rand_leaf_id_1"
 		action = "SpineIngress.act_get_rand_leaf_id_1"
-		k1 = bfrtC.MakeExactKey("saqr_md.random_ds_index_1", uint64(i))
-		k2 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		k1 = bfrtC.MakeExactKey("horus_md.random_ds_index_1", uint64(i))
+		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
 		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -764,8 +831,8 @@ func (cp *BfrtSpineCP_V1) Init() {
 		}
 		table = "pipe_spine.SpineIngress.get_rand_leaf_id_2"
 		action = "SpineIngress.act_get_rand_leaf_id_2"
-		k1 = bfrtC.MakeExactKey("saqr_md.random_ds_index_2", uint64(i))
-		k2 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		k1 = bfrtC.MakeExactKey("horus_md.random_ds_index_2", uint64(i))
+		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
 		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -778,8 +845,8 @@ func (cp *BfrtSpineCP_V1) Init() {
 		// Mapping leafID -> index (of qlen list)
 		table = "pipe_spine.SpineIngress.get_switch_index"
 		action = "SpineIngress.act_get_switch_index"
-		k1 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
-		k2 = bfrtC.MakeExactKey("hdr.saqr.src_id", uint64(leaf.ID))
+		k1 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k2 = bfrtC.MakeExactKey("hdr.horus.src_id", uint64(leaf.ID))
 		d1 = bfrtC.MakeBytesData("switch_index", uint64(i))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -793,7 +860,7 @@ func (cp *BfrtSpineCP_V1) Init() {
 	// vcID -> #leaves mapping
 	table := "pipe_spine.SpineIngress.get_cluster_num_valid_leafs"
 	action := "SpineIngress.act_get_cluster_num_valid_leafs"
-	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+	k1 := bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
 	d1 := bfrtC.MakeBytesData("num_leafs", uint64(len(spine.Children)))
 	ks := bfrtC.MakeKeys(k1)
 	ds := bfrtC.MakeData(d1)
@@ -814,7 +881,7 @@ func (cp *BfrtSpineCP_V1) InitRandomAdjustTables() {
 		table_ds := "pipe_spine.SpineIngress.adjust_random_range_sq_leafs"
 		num_bits := uint64(math.Ceil(math.Log2(float64(i))))
 		action := fmt.Sprintf("SpineIngress.adjust_random_leaf_index_%d", num_bits)
-		k_ds_1 := bfrtC.MakeExactKey("saqr_md.cluster_num_valid_queue_signals", uint64(i))
+		k_ds_1 := bfrtC.MakeExactKey("horus_md.cluster_num_valid_queue_signals", uint64(i))
 		k_ds := bfrtC.MakeKeys(k_ds_1)
 		logrus.Debugf("bits=%d, key=%d, action=%s", num_bits, i, action)
 		entry_ds := bfrtclient.NewTableEntry(table_ds, k_ds, action, nil, nil) // Parham: works with nil data?
@@ -841,8 +908,8 @@ func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64, added bool) 
 		// Mapping leafID -> index (of qlen list)
 		table := "pipe_spine.SpineIngress.get_switch_index"
 		action := "SpineIngress.act_get_switch_index"
-		k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
-		k2 := bfrtC.MakeExactKey("hdr.saqr.src_id", uint64(leaf.ID))
+		k1 := bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k2 := bfrtC.MakeExactKey("hdr.horus.src_id", uint64(leaf.ID))
 		d1 := bfrtC.MakeBytesData("switch_index", uint64(leaf.Index))
 		ks := bfrtC.MakeKeys(k1, k2)
 		ds := bfrtC.MakeData(d1)
@@ -853,8 +920,8 @@ func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64, added bool) 
 		// index (of qlen list) -> leafID mapping
 		table = "pipe_spine.SpineIngress.get_rand_leaf_id_1"
 		action = "SpineIngress.act_get_rand_leaf_id_1"
-		k1 = bfrtC.MakeExactKey("saqr_md.random_ds_index_1", uint64(leaf.Index))
-		k2 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		k1 = bfrtC.MakeExactKey("horus_md.random_ds_index_1", uint64(leaf.Index))
+		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
 		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -865,8 +932,8 @@ func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64, added bool) 
 
 		table = "pipe_spine.SpineIngress.get_rand_leaf_id_2"
 		action = "SpineIngress.act_get_rand_leaf_id_2"
-		k1 = bfrtC.MakeExactKey("saqr_md.random_ds_index_2", uint64(leaf.Index))
-		k2 = bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		k1 = bfrtC.MakeExactKey("horus_md.random_ds_index_2", uint64(leaf.Index))
+		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
 		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -879,7 +946,7 @@ func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64, added bool) 
 	// Decrement total number of available children
 	table := "pipe_spine.SpineIngress.get_cluster_num_valid_leafs"
 	action := "SpineIngress.act_get_cluster_num_valid_leafs"
-	k1 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+	k1 := bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
 	d1 := bfrtC.MakeBytesData("num_leafs", uint64(childCount))
 	ks := bfrtC.MakeKeys(k1)
 	ds := bfrtC.MakeData(d1)
@@ -983,8 +1050,8 @@ func (cp *BfrtSpineCP_V2) Init() {
 		// LeafId -> qlen_unit mapping
 		table := "pipe_spine.SpineIngress.set_queue_len_unit_1"
 		action := "SpineIngress.act_set_queue_len_unit_1"
-		k1 := bfrtC.MakeExactKey("saqr_md.low_ds_id", uint64(leaf.ID))
-		k2 := bfrtC.MakeExactKey("hdr.saqr.cluster_id", vcID)
+		k1 := bfrtC.MakeExactKey("horus_md.low_ds_id", uint64(leaf.ID))
+		k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
 		d1 := bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
 		ks := bfrtC.MakeKeys(k1, k2)
 		ds := bfrtC.MakeData(d1)
@@ -1057,31 +1124,38 @@ func (cp *BfrtSpineCP_V2) MonitorStats() {
 func (cp *BfrtSpineCP_V1) MonitorStats() {
 	ctx := context.Background()
 	bfrtclient := cp.client
-	regIdleCount := "pipe_spine.SpineIngress.idle_count"
-	val, err1 := bfrtclient.ReadRegister(ctx, regIdleCount, 0)
-	if err1 != nil {
-		logrus.Fatal("Cannot read register")
-	}
-	logrus.Debugf("Idle Count: %d", val)
-	for i := 0; i < 4; i++ {
-		regIdleList := "pipe_spine.SpineIngress.idle_list"
-		idle_element, _ := bfrtclient.ReadRegister(ctx, regIdleList, uint64(i))
-		logrus.Debugf("IdleList[%d] = %d: ", i, idle_element)
-	}
-	qlenList1 := "pipe_spine.SpineIngress.queue_len_list_1"
-	qlenList2 := "pipe_spine.SpineIngress.queue_len_list_2"
-	defList1 := "pipe_spine.SpineIngress.deferred_queue_len_list_1"
-	defList2 := "pipe_spine.SpineIngress.deferred_queue_len_list_2"
-	for i := 0; i < 4; i++ {
-		val, _ := bfrtclient.ReadRegister(ctx, qlenList1, uint64(i))
-		logrus.Debugf("qlenList1[%d] = %d: ", i, val)
-		val, _ = bfrtclient.ReadRegister(ctx, qlenList2, uint64(i))
-		logrus.Debugf("qlenList2[%d] = %d: ", i, val)
-		val, _ = bfrtclient.ReadRegister(ctx, defList1, uint64(i))
-		logrus.Debugf("defList1[%d] = %d: ", i, val)
-		val, _ = bfrtclient.ReadRegister(ctx, defList2, uint64(i))
-		logrus.Debugf("defList2[%d] = %d: ", i, val)
-	}
+	// regIdleCount := "pipe_spine.SpineIngress.idle_count"
+	// val, err1 := bfrtclient.ReadRegister(ctx, regIdleCount, 0)
+	// if err1 != nil {
+	// 	logrus.Fatal("Cannot read register")
+	// }
+	// logrus.Debugf("Idle Count: %d", val)
+	// for i := 0; i < 4; i++ {
+	// 	regIdleList := "pipe_spine.SpineIngress.idle_list"
+	// 	idle_element, _ := bfrtclient.ReadRegister(ctx, regIdleList, uint64(i))
+	// 	logrus.Debugf("IdleList[%d] = %d: ", i, idle_element)
+	// }
+	// qlenList1 := "pipe_spine.SpineIngress.queue_len_list_1"
+	// qlenList2 := "pipe_spine.SpineIngress.queue_len_list_2"
+	// defList1 := "pipe_spine.SpineIngress.deferred_queue_len_list_1"
+	// defList2 := "pipe_spine.SpineIngress.deferred_queue_len_list_2"
+	// for i := 0; i < 4; i++ {
+	// 	val, _ := bfrtclient.ReadRegister(ctx, qlenList1, uint64(i))
+	// 	logrus.Debugf("qlenList1[%d] = %d: ", i, val)
+	// 	val, _ = bfrtclient.ReadRegister(ctx, qlenList2, uint64(i))
+	// 	logrus.Debugf("qlenList2[%d] = %d: ", i, val)
+	// 	val, _ = bfrtclient.ReadRegister(ctx, defList1, uint64(i))
+	// 	logrus.Debugf("defList1[%d] = %d: ", i, val)
+	// 	val, _ = bfrtclient.ReadRegister(ctx, defList2, uint64(i))
+	// 	logrus.Debugf("defList2[%d] = %d: ", i, val)
+	// }
+
+	regTot := "pipe_spine.SpineIngress.stat_count_task"
+	regResub := "pipe_spine.SpineIngress.stat_count_resub"
+	resubCount, _ := bfrtclient.ReadRegister(ctx, regResub, 0)
+	taskCount, _ := bfrtclient.ReadRegister(ctx, regTot, 0)
+	logrus.Infof("Total resubmissions at Spine (Task resub + Idle remove resub): %d", resubCount)
+	logrus.Infof("Total tasks arrived at Spine: %d", taskCount)
 }
 
 func (cp *FakeSpineCP) MonitorStats() {
@@ -1267,7 +1341,7 @@ func (cp *BfrtManagerCP_V2) InitRandomAdjustTables() {
 	for i := 1; i <= 5; i++ {
 		action := fmt.Sprintf("LeafIngress.adjust_random_worker_range_%d", i)
 		table_us := "pipe_leaf.LeafIngress.adjust_random_range_us"
-		k_us_1 := bfrtC.MakeExactKey("saqr_md.cluster_num_valid_us", uint64(math.Pow(2, float64(i))))
+		k_us_1 := bfrtC.MakeExactKey("horus_md.cluster_num_valid_us", uint64(math.Pow(2, float64(i))))
 		k_us := bfrtC.MakeKeys(k_us_1)
 		entry_us := bfrtclient.NewTableEntry(table_us, k_us, action, nil, nil) // Parham: works with nil data?
 		if err := bfrtclient.InsertTableEntry(ctx, entry_us); err != nil {

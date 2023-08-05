@@ -1,4 +1,4 @@
-# Topology config used for Multi-rack experiments with uniform worker distribution between the racks
+# Topology config used for multi-rack experiments with skewed worker distribution setup
 # All the available ASICs in the DC
 [asics]
     [[asics.asic]]
@@ -50,17 +50,23 @@
 
 [topology]
     # Applications sending tasks and receiving their results
-    # RocksDB client ID
+    # RocksDB client ID (nsl-62)
     [[topology.clients]]
         id = 110
         asic = "tofino"
         port = "9/0" # client <-> spine
     
-    # TPC-C client ID
+    # TPC-C client ID 1 (nsl-62)
     [[topology.clients]]
         id = 150
         asic = "tofino"
         port = "9/0" # client <-> spine
+    
+    # TPC-C client ID 2 (nsl-42)
+    [[topology.clients]]
+        id = 250
+        asic = "tofino"
+        port = "9/2" # client <-> spine
 
     [[topology.spines]]
         id = 100
@@ -110,43 +116,51 @@
         index = 3
         address = "0.0.0.0:6004"
         mgmtAddress = "0.0.0.0:7001"
-        servers = [3] # order matters
+        servers = [3,4,5] # order matters
         # switch-specific values
         asic = "tofino"
         us_port = "29/0" # from leaf->spine
         ds_port = "23/0" # from spine->leaf
 
-    #cs-nsl-55
+    #cs-nsl-55 (emulated server 1)
     [[topology.servers]]
         id = 0
         port = "1/0" # server<->leaf
         address = "F8:F2:1E:3A:13:EC"
-        workers_count = 8
+        workers_count = 4
+    
+    #cs-nsl-55 (emulated server 2)
+    [[topology.servers]]
+        id = 1
+        port = "1/0" # server<->leaf
+        address = "F8:F2:1E:3A:13:EC"
+        workers_count = 4        
 
     #cs-nsl-56
     [[topology.servers]]
-        id = 1
+        id = 2
         port = "1/2" # server<->leaf
         address = "F8:F2:1E:3A:13:0C"
         workers_count = 8
+
+    #cs-nsl-ramses
+    [[topology.servers]]
+        id = 3
+        port = "3/2" # server<->leaf
+        address = "F8:F2:1E:13:CA:FC"
+        workers_count = 16
     
     #cs-nsl-57
     [[topology.servers]]
-        id = 2
+        id = 4
         port = "2/0" # server<->leaf
         address = "F8:F2:1E:3A:13:C4"
         workers_count = 8
 
     #cs-nsl-58
     [[topology.servers]]
-        id = 3
+        id = 5
         port = "2/2" # server<->leaf
         address = "F8:F2:1E:3A:07:24"
         workers_count = 8
 
-    #cs-nsl-ramses
-    #[[topology.servers]]
-    #    id = 4
-    #    port = "3/2" # server<->leaf
-    #    address = "F8:F2:1E:13:CA:FC"
-    #    workers_count = 8

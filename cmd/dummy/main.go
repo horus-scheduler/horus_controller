@@ -317,8 +317,47 @@ func test_leaf_index(client *HorusClient) {
 	// client.AddServer(11, 8, "9/2", "bb:bb:bb:bb:bb:bb", 4)
 }
 
+func experiment_leaf_failure_add (client *HorusClient) {
+	time.Sleep(10 * time.Second)
+	// Starting failures
+	client.FailLeaf(2)
+	time.Sleep(10 * time.Second)
+	client.FailLeaf(1)
+	time.Sleep(5 * time.Second)
+	
+	// Adding new resources
+	client.AddLeaf(2, 100, "19/0", "25/0", "0.0.0.0:6006", "0.0.0.0:7001")
+	time.Sleep(5 * time.Second)
+	client.AddServer(2, 8, "2/0", "F8:F2:1E:3A:13:C4", 2)
+	time.Sleep(5 * time.Second)
+	client.AddLeaf(1, 100, "22/0", "28/0", "0.0.0.0:6005", "0.0.0.0:7001")
+	time.Sleep(5 * time.Second)
+	client.AddServer(1, 8, "1/2", "F8:F2:1E:3A:13:0C", 1)
+	time.Sleep(10 * time.Second)
+}
+
+func experiment_dynamic_scale(client *HorusClient) {
+	client.FailLeaf(2)
+	client.FailLeaf(1)
+	time.Sleep(10 * time.Second)
+	logrus.Info("Topo ready, start load generator client!");
+	time.Sleep(1 * time.Second)
+	time.Sleep(10 * time.Second)
+	// Adding new resources
+	client.AddLeaf(2, 100, "19/0", "25/0", "0.0.0.0:6006", "0.0.0.0:7001")
+	time.Sleep(10 * time.Second)
+	client.AddServer(2, 8, "2/0", "F8:F2:1E:3A:13:C4", 2)
+	time.Sleep(10 * time.Second)
+	client.AddLeaf(1, 100, "22/0", "28/0", "0.0.0.0:6005", "0.0.0.0:7001")
+	time.Sleep(10 * time.Second)
+	client.AddServer(1, 8, "1/2", "F8:F2:1E:3A:13:0C", 1)
+	time.Sleep(10 * time.Second)	
+}
 func main() {
 	client := NewHorusClient("0.0.0.0:4001", "tofino")
+	// experiment_leaf_failure_add(client)
+	experiment_dynamic_scale(client)
+	logrus.Info("Experiment scenario finished")
 	// client.GetTopology()
 	// time.Sleep(10 * time.Second)
 	// client.FailServer(1)
@@ -327,12 +366,7 @@ func main() {
 	// client.AddServer(10, 8, "9/1", "aa:aa:aa:aa:aa:aa", 4)
 	// time.Sleep(10 * time.Second)
 	//client.GetTopology()
-	client.FailLeaf(1)
-	time.Sleep(10 * time.Second)
-	client.AddLeaf(1, 100, "22/0", "28/0", "0.0.0.0:6005", "0.0.0.0:7001")
-	time.Sleep(10 * time.Second)
-	client.AddServer(1, 8, "1/2", "F8:F2:1E:3A:13:0C", 1)
-
+	
 	// test_leaf_index(pool)
 	// test_fail_three_servers_then_leaf(pool)
 	// test_add_two_servers(pool)

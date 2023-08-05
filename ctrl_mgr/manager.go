@@ -130,7 +130,7 @@ func (sc *switchManager) Run() {
 	for _, l := range sc.leaves {
 		go l.StartBare(true)
 	}
-
+	t_last_read := time.Now()
 	for {
 		select {
 		case newLeaf := <-sc.newLeaves:
@@ -177,6 +177,12 @@ func (sc *switchManager) Run() {
 				sc.Unlock()
 			}
 		default:
+			elapsed := time.Since(t_last_read).Seconds()
+			if elapsed >= 10 {
+				sc.cp.MonitorStats()
+				t_last_read = time.Now()	
+			}
+			
 			continue
 		}
 	}
