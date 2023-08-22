@@ -197,18 +197,18 @@ func CreateFullHorusPacket(horus *HorusPacket,
 }
 
 func TestHorusPkt(pkt_type byte,
-	cluster_id uint16,
+	pool_id uint16,
 	src_id uint16,
 	dst_id uint16,
-	seq_num uint16,
+	task_id uint16,
 	payload []byte) {
 
 	horusPkt := &HorusPacket{
 		PktType:    pkt_type,
-		ClusterID:  cluster_id,
+		ClusterID:  pool_id,
 		SrcID:      src_id,
 		DstID:      dst_id,
-		SeqNum:     seq_num,
+		SeqNum:     task_id,
 		RestOfData: payload,
 	}
 	if pktBytes, err := CreateFullHorusPacket(horusPkt, net.IP{10, 1, 0, 1}, net.IP{10, 1, 0, 2}); err != nil {

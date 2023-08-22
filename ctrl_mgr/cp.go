@@ -105,7 +105,7 @@ func LeafCPInitAllVer(ctx context.Context,
 				logrus.Fatal(err)
 			}
 			k1 := bfrtC.MakeExactKey("hdr.horus.dst_id", uint64(index))
-			k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
+			k2 := bfrtC.MakeExactKey("hdr.horus.pool_id", uint64(leaf.ID))
 			ks := bfrtC.MakeKeys(k1, k2)
 			// Khaled: Check PortId -> UsPort.GetDevPort()
 			// d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
@@ -149,7 +149,7 @@ func LeafCPInitAllVer(ctx context.Context,
 		table = "pipe_leaf.LeafIngress.forward_horus_switch_dst"
 		action = "LeafIngress.act_forward_horus"
 		k1 = bfrtC.MakeExactKey("hdr.horus.dst_id", uint64(uid))
-		k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.Index))
+		k2 := bfrtC.MakeExactKey("hdr.horus.pool_id", uint64(leaf.Index))
 		ks = bfrtC.MakeKeys(k1, k2)
 		usPort := leaf.UsPort.GetDevPort()
 		d1 := bfrtC.MakeBytesData("port", usPort)
@@ -181,7 +181,7 @@ func LeafCPInitAllVer(ctx context.Context,
 	num_spines := int(math.Max(float64(len(spines)), 2))
 	table = "pipe_leaf.LeafIngress.get_cluster_num_valid"
 	action = "LeafIngress.act_get_cluster_num_valid"
-	k1 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
+	k1 := bfrtC.MakeExactKey("hdr.horus.pool_id", uint64(leaf.ID))
 	d1 := bfrtC.MakeBytesData("num_ds_elements", uint64(worker_count))
 	// Assumption in P4: minimum two spines (one random bit 0|1)
 	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(num_spines))
@@ -198,7 +198,7 @@ func LeafCPInitAllVer(ctx context.Context,
 
 	for spine_idx := 0; spine_idx < num_spines; spine_idx++ {
 		k1 := bfrtC.MakeExactKey("horus_md.random_id_1", uint64(spine_idx))
-		k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
+		k2 := bfrtC.MakeExactKey("hdr.horus.pool_id", uint64(leaf.ID))
 		ks := bfrtC.MakeKeys(k1, k2)
 		// Both will have the same spine ID (at index 0) in our testbed (one spine only)
 		d1 := bfrtC.MakeBytesData("spine_dst_id", uint64(spines[0].ID))
@@ -213,7 +213,7 @@ func LeafCPInitAllVer(ctx context.Context,
 	qlen_unit := model.WorkerQlenUnitMap[worker_count]
 	table = "pipe_leaf.LeafIngress.set_queue_len_unit"
 	action = "LeafIngress.act_set_queue_len_unit"
-	k1 = bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
+	k1 = bfrtC.MakeExactKey("hdr.horus.pool_id", uint64(leaf.ID))
 	d1 = bfrtC.MakeBytesData("cluster_unit", uint64(qlen_unit))
 	ks = bfrtC.MakeKeys(k1)
 	ds = bfrtC.MakeData(d1)
@@ -247,7 +247,7 @@ func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, updated []*mode
 	table := "pipe_leaf.LeafIngress.get_cluster_num_valid"
 	action := "LeafIngress.act_get_cluster_num_valid"
 	// Parham: Assumed e.ctrlID is 0-indexed and indicates virtual leaf ID?
-	k1 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
+	k1 := bfrtC.MakeExactKey("hdr.horus.pool_id", uint64(leaf.ID))
 	d1 := bfrtC.MakeBytesData("num_ds_elements", uint64(worker_count))
 	// Parham: How can we access number of spines avilable (random linkage for idle count),
 	d2 := bfrtC.MakeBytesData("num_us_elements", uint64(2)) // put constant here works in our testbed but should be modified
@@ -262,7 +262,7 @@ func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, updated []*mode
 	qlen_unit, _ := model.WorkerQlenUnitMap[worker_count]
 	table = "pipe_leaf.LeafIngress.set_queue_len_unit"
 	action = "LeafIngress.act_set_queue_len_unit"
-	k1 = bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
+	k1 = bfrtC.MakeExactKey("hdr.horus.pool_id", uint64(leaf.ID))
 	d1 = bfrtC.MakeBytesData("cluster_unit", uint64(qlen_unit))
 	ks = bfrtC.MakeKeys(k1)
 	ds = bfrtC.MakeData(d1)
@@ -286,7 +286,7 @@ func OnServerChangeAllVer(ctx context.Context, leaf *model.Node, updated []*mode
 				logrus.Fatal(err)
 			}
 			k1 := bfrtC.MakeExactKey("hdr.horus.dst_id", uint64(index))
-			k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", uint64(leaf.ID))
+			k2 := bfrtC.MakeExactKey("hdr.horus.pool_id", uint64(leaf.ID))
 			ks := bfrtC.MakeKeys(k1, k2)
 			// d1 := bfrtC.MakeBytesData("port", uint64(server.PortId))
 			d1 := bfrtC.MakeBytesData("port", uint64(server.Port.GetDevPort()))
@@ -821,7 +821,7 @@ func (cp *BfrtSpineCP_V1) Init() {
 		table := "pipe_spine.SpineIngress.set_queue_len_unit_1"
 		action := "SpineIngress.act_set_queue_len_unit_1"
 		k1 := bfrtC.MakeExactKey("horus_md.random_id_1", uint64(leaf.ID))
-		k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k2 := bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 		d1 := bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
 		ks := bfrtC.MakeKeys(k1, k2)
 		ds := bfrtC.MakeData(d1)
@@ -834,7 +834,7 @@ func (cp *BfrtSpineCP_V1) Init() {
 		table = "pipe_spine.SpineIngress.set_queue_len_unit_2"
 		action = "SpineIngress.act_set_queue_len_unit_2"
 		k1 = bfrtC.MakeExactKey("horus_md.random_id_2", uint64(leaf.ID))
-		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k2 = bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 		d1 = bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -847,7 +847,7 @@ func (cp *BfrtSpineCP_V1) Init() {
 		table = "pipe_spine.SpineIngress.set_queue_len_unit_resub"
 		action = "SpineIngress.act_set_queue_len_unit_resub"
 		k1 = bfrtC.MakeExactKey("horus_md.selected_ds_index", uint64(leaf.ID))
-		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k2 = bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 		d1 = bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -861,7 +861,7 @@ func (cp *BfrtSpineCP_V1) Init() {
 		table = "pipe_spine.SpineIngress.get_rand_leaf_id_1"
 		action = "SpineIngress.act_get_rand_leaf_id_1"
 		k1 = bfrtC.MakeExactKey("horus_md.random_ds_index_1", uint64(i))
-		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k2 = bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -873,7 +873,7 @@ func (cp *BfrtSpineCP_V1) Init() {
 		table = "pipe_spine.SpineIngress.get_rand_leaf_id_2"
 		action = "SpineIngress.act_get_rand_leaf_id_2"
 		k1 = bfrtC.MakeExactKey("horus_md.random_ds_index_2", uint64(i))
-		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k2 = bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -886,7 +886,7 @@ func (cp *BfrtSpineCP_V1) Init() {
 		// Mapping leafID -> index (of qlen list)
 		table = "pipe_spine.SpineIngress.get_switch_index"
 		action = "SpineIngress.act_get_switch_index"
-		k1 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k1 = bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 		k2 = bfrtC.MakeExactKey("hdr.horus.src_id", uint64(leaf.ID))
 		d1 = bfrtC.MakeBytesData("switch_index", uint64(i))
 		ks = bfrtC.MakeKeys(k1, k2)
@@ -901,7 +901,7 @@ func (cp *BfrtSpineCP_V1) Init() {
 	// vcID -> #leaves mapping
 	table := "pipe_spine.SpineIngress.get_cluster_num_valid_leafs"
 	action := "SpineIngress.act_get_cluster_num_valid_leafs"
-	k1 := bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+	k1 := bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 	d1 := bfrtC.MakeBytesData("num_leafs", uint64(len(spine.Children)))
 	ks := bfrtC.MakeKeys(k1)
 	ds := bfrtC.MakeData(d1)
@@ -949,7 +949,7 @@ func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64, added bool) 
 		// Mapping leafID -> index (of qlen list)
 		table := "pipe_spine.SpineIngress.get_switch_index"
 		action := "SpineIngress.act_get_switch_index"
-		k1 := bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k1 := bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 		k2 := bfrtC.MakeExactKey("hdr.horus.src_id", uint64(leaf.ID))
 		d1 := bfrtC.MakeBytesData("switch_index", uint64(leaf.Index))
 		ks := bfrtC.MakeKeys(k1, k2)
@@ -962,7 +962,7 @@ func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64, added bool) 
 		table = "pipe_spine.SpineIngress.get_rand_leaf_id_1"
 		action = "SpineIngress.act_get_rand_leaf_id_1"
 		k1 = bfrtC.MakeExactKey("horus_md.random_ds_index_1", uint64(leaf.Index))
-		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k2 = bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -974,7 +974,7 @@ func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64, added bool) 
 		table = "pipe_spine.SpineIngress.get_rand_leaf_id_2"
 		action = "SpineIngress.act_get_rand_leaf_id_2"
 		k1 = bfrtC.MakeExactKey("horus_md.random_ds_index_2", uint64(leaf.Index))
-		k2 = bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k2 = bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 		d1 = bfrtC.MakeBytesData("leaf_id", uint64(leaf.ID))
 		ks = bfrtC.MakeKeys(k1, k2)
 		ds = bfrtC.MakeData(d1)
@@ -987,7 +987,7 @@ func (cp *BfrtSpineCP_V1) OnLeafChange(leafID uint64, index uint64, added bool) 
 	// Decrement total number of available children
 	table := "pipe_spine.SpineIngress.get_cluster_num_valid_leafs"
 	action := "SpineIngress.act_get_cluster_num_valid_leafs"
-	k1 := bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+	k1 := bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 	d1 := bfrtC.MakeBytesData("num_leafs", uint64(childCount))
 	ks := bfrtC.MakeKeys(k1)
 	ds := bfrtC.MakeData(d1)
@@ -1092,7 +1092,7 @@ func (cp *BfrtSpineCP_V2) Init() {
 		table := "pipe_spine.SpineIngress.set_queue_len_unit_1"
 		action := "SpineIngress.act_set_queue_len_unit_1"
 		k1 := bfrtC.MakeExactKey("horus_md.low_ds_id", uint64(leaf.ID))
-		k2 := bfrtC.MakeExactKey("hdr.horus.cluster_id", vcID)
+		k2 := bfrtC.MakeExactKey("hdr.horus.pool_id", vcID)
 		d1 := bfrtC.MakeBytesData("cluster_unit", uint64(model.WorkerQlenUnitMap[worker_count]))
 		ks := bfrtC.MakeKeys(k1, k2)
 		ds := bfrtC.MakeData(d1)
