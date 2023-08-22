@@ -1,7 +1,12 @@
 package ctrl_mgr
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/horus-scheduler/horus_controller/core"
@@ -130,7 +135,9 @@ func (sc *switchManager) Run() {
 	for _, l := range sc.leaves {
 		go l.StartBare(true)
 	}
-	t_last_read := time.Now()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
+	defer stop()
+
 	for {
 		select {
 		case newLeaf := <-sc.newLeaves:
@@ -176,14 +183,14 @@ func (sc *switchManager) Run() {
 				logrus.Debugf("[Manager] Leaves count = %d", len(sc.leaves))
 				sc.Unlock()
 			}
-		default:
-			elapsed := time.Since(t_last_read).Seconds()
-			if elapsed >= 10 {
-				sc.cp.MonitorStats()
-				t_last_read = time.Now()	
-			}
-			
-			continue
+		
+		case <-time.After(5 * time.Second):
+			sc.cp.MonitorStats(ctx)
+		case <-ctx.Done():
+			fmt.Println("starting gracefull shutdown")
+			sc.cp.DumpFinalStats(ctx)
+			os.Exit(0)
+
 		}
 	}
 }

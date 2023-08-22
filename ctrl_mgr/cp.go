@@ -3,9 +3,12 @@ package ctrl_mgr
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net"
+	"time"
 
 	"github.com/horus-scheduler/horus_controller/core/model"
 	bfrtC "github.com/khaledmdiab/bfrt-go-client/pkg/client"
@@ -493,7 +496,8 @@ func SpineCPOnLeafChangeAllVer(ctx context.Context,
 type ManagerCP interface {
 	Init()
 	InitRandomAdjustTables()
-	MonitorStats()
+	MonitorStats(context.Context)
+	DumpFinalStats(context.Context)
 }
 
 type LeafCP interface {
@@ -522,12 +526,20 @@ func (cp *FakeManagerCP) Init() {
 func (cp *FakeManagerCP) InitRandomAdjustTables() {
 	logrus.Info("Calling FakeManagerCP.InitRandomAdjustTables")
 }
-func (cp *FakeManagerCP) MonitorStats() {
+func (cp *FakeManagerCP) MonitorStats(context.Context) {
 	logrus.Info("Calling FakeManagerCP.MonitorStats")	
 }
 
-func (cp *BfrtManagerCP_V2) MonitorStats() {
+func (cp *FakeManagerCP) DumpFinalStats(context.Context) {
+	logrus.Info("Calling FakeManagerCP.DumpFinalStats")	
+}
+
+func (cp *BfrtManagerCP_V2) MonitorStats(context.Context) {
 	logrus.Info("Calling BfrtManagerCP_V2.MonitorStats")	
+}
+
+func (cp *BfrtManagerCP_V2) DumpFinalStats(context.Context) {
+	logrus.Info("Calling BfrtManagerCP_V2.DumpFinalStats")	
 }
 
 type FakeLeafCP struct {
@@ -594,14 +606,19 @@ func (cp *BfrtManagerCP_V1) Init() {
 	cp.InitRandomAdjustTables()
 }
 
-func (cp *BfrtManagerCP_V1) MonitorStats() {
-	ctx := context.Background()
-	bfrtclient := cp.client
 
-	totalResubLeaf := uint64(0)
-    totalMsgLoad := uint64(0)
-    totalMsgIdle := uint64(0)
-    //aggQlen := uint64(0)
+type StatsObject struct {
+	TotalTaskCount uint64
+	TotalResubLeaf uint64
+	TotalMsgIdle uint64
+	TotalMsgLoad uint64
+	TotalStateUpdateMessages uint64
+}
+
+func (cp *BfrtManagerCP_V1) fetchStats(ctx context.Context) StatsObject{
+	statsObject := StatsObject{}
+
+	bfrtclient := cp.client
     regResubCount := "pipe_leaf.LeafIngress.stat_count_resub"
     regLoadSignalCount := "pipe_leaf.LeafIngress.stat_count_load_signal"
     regIdleSignalCount := "pipe_leaf.LeafIngress.stat_count_idle_signal"
@@ -611,25 +628,49 @@ func (cp *BfrtManagerCP_V1) MonitorStats() {
     // Parham: Just quickly added this, manager has no access to topology, for-loop should be in range of #Emulated Leaves
 	for i:=0; i < 4; i++ {
 		val, _ := bfrtclient.ReadRegister(ctx, regResubCount, uint64(i))
-		totalResubLeaf += val
+		statsObject.TotalResubLeaf += val
 		
 		val, _ = bfrtclient.ReadRegister(ctx, regLoadSignalCount, uint64(i))
-		totalMsgLoad += val
+		statsObject.TotalMsgLoad += val
 		
 		val, _ = bfrtclient.ReadRegister(ctx, regIdleSignalCount, uint64(i))
-		totalMsgIdle += val
+		statsObject.TotalMsgIdle += val
 		logrus.Infof("Idle messages[%d]: %d", i, val)
-		//aggQlen, _ = bfrtclient.ReadRegister(ctx, regAggQlen, uint64(i))
-		//logrus.Infof("AggQlen Leaf[%d] = %d", i, aggQlen)
 	}
-	totaTaskCount,_ := bfrtclient.ReadRegister(ctx, regTaskCount, 0)
-	
-	logrus.Infof("Total tasks arrived at Leaf: %d", totaTaskCount)
-	logrus.Infof("Leaf Total Resubmission: %d", totalResubLeaf)
-	logrus.Infof("Total Msgs for Load Signals: %d", totalMsgLoad)
-	logrus.Infof("Total Msgs for Idle Signals: %d", totalMsgIdle)
-	logrus.Infof("Sum Total State Update Msgs: %d", totalMsgLoad+totalMsgIdle)
+
+	statsObject.TotalTaskCount, _ = bfrtclient.ReadRegister(ctx, regTaskCount, 0)
+	statsObject.TotalStateUpdateMessages = statsObject.TotalMsgIdle + statsObject.TotalMsgLoad
+
+	return statsObject
 }
+
+
+func (cp *BfrtManagerCP_V1) MonitorStats(ctx context.Context) {	
+	statsObject := cp.fetchStats(ctx)
+	logrus.Infof("MonitorStats::Total tasks arrived at Leaf: %d", statsObject.TotalTaskCount)
+	logrus.Infof("MonitorStats::Leaf Total Resubmission: %d", statsObject.TotalResubLeaf)
+	logrus.Infof("MonitorStats::Total Msgs for Load Signals: %d", statsObject.TotalMsgLoad)
+	logrus.Infof("MonitorStats::Total Msgs for Idle Signals: %d", statsObject.TotalMsgIdle)
+	logrus.Infof("MonitorStats::Total State Update Msgs: %d", statsObject.TotalStateUpdateMessages)
+}
+
+func (cp *BfrtManagerCP_V1) DumpFinalStats(_ context.Context) {
+	statsObject := cp.fetchStats(context.Background())
+	logrus.Debug("Starting Gracefull Shutdown")
+	jsonFormatted, _ := json.MarshalIndent(statsObject, "", "    ")
+	fmt.Println("json formatted: ", string(jsonFormatted))
+
+	statsFileName := fmt.Sprintf("manager-stats-%d.json", time.Now().Unix())
+
+	err := ioutil.WriteFile(statsFileName, jsonFormatted, 0644)
+	if err != nil {
+		logrus.Debug("Error writing stats to file:", err)  //print the failed message
+		return
+	}
+
+	logrus.Debugf("Successfully dumped to the file %s.", statsFileName)  //print the success message
+}
+
 
 func (cp *BfrtManagerCP_V1) InitRandomAdjustTables() {
 	logrus.Info("Calling BfrtManagerCP.InitRandomAdjustTables")
