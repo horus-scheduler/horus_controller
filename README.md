@@ -51,7 +51,7 @@ We made few assumptions while designing the control plane. Most of these assumpt
 
 3. ***Horus Controller Manager Output***
 
-    Upon exiting the horus-switch-mgr, it will automatically generate a JSON file in the format manager-stats-\<timestamp\>. The reported statistics include:
+    Upon exiting the horus-switch-mgr, it will automatically generate a JSON file in the format manager-stats-\<timestamp\>. The reported statistics includes:
 
     - Total tasks arrived at leaf
     - Total resubmitted tasks
