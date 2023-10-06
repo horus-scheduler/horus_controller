@@ -51,13 +51,13 @@ We made few assumptions while designing the control plane. Most of these assumpt
 
 3. ***Horus Controller Manager Output***
 
-Upon exiting the horus-switch-mgr, it will automatically generate a JSON file in the format manager-stats-\<timestamp\>. The reported statistics include:
+    Upon exiting the horus-switch-mgr, it will automatically generate a JSON file in the format manager-stats-\<timestamp\>. The reported statistics include:
 
-- Total tasks arrived at leaf
-- Total resubmitted tasks
-- Total number of messages for load information
-- Total number of messages for idle nodes information
-- Total number of state update signals (Sum of load and idle information messages)
+    - Total tasks arrived at leaf
+    - Total resubmitted tasks
+    - Total number of messages for load information
+    - Total number of messages for idle nodes information
+    - Total number of state update signals (Sum of load and idle information messages)
 
 ## Todo
 
