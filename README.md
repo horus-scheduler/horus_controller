@@ -1,15 +1,10 @@
 # Horus Control Plane
 
-This repository contains our implementation of the control plane of the Horus in-network task scheduler. 
-
-XXX Explain what Horus is.
+This repository contains our implementation of the control plane of the NSDI’24 paper, **Horus: Granular In-Network Task Scheduler for Cloud Datacenters**.
 
 Horus has both data plane and control plane components. 
+
 The control plane of Horus consists of a centralized controller, spine controllers, and leaf controllers. While the data plane schedules tasks, the control plane handles initialization, failures, and dynamic virtual clusters.
-
-
-## Design
-
 
 ## Building
 
@@ -49,18 +44,35 @@ We made few assumptions while designing the control plane. Most of these assumpt
     - Adding a new leaf controller could take ~5 seconds
         - This is because the `manager` needs to shutdown multiple components.
 
-3. ***Horus Controller Manager Output***
+## Configurations
+The configuration of the testbed should be described in a .toml file placed under /conf/ directory. 
+The file describes available Switch ASICS, port configurations on the switches,  component details and the topology of the cluster (client IDs, switch IDs, servers and placement of workers in the racks).
 
-    Upon exiting the horus-switch-mgr, it will automatically generate a JSON file in the format manager-stats-\<timestamp\>. The reported statistics includes:
+Examples provided support the following configurations:
+ 1. Single-rack setup: Fig 6
+ 2. Multi-rack Uniform: Figs 7(a), 8(a), 9(a), 14(a), 15 (a)-(c), 16(a)-(c)
+ 3. Multi-rack Skewed: Figs 7(b), 8(b), 9(b), 14(b), 15 (d)-(f), 16 (d)-(f)
 
-    - Total tasks arrived at leaf
-    - Total resubmitted tasks
-    - Total number of messages for load information
-    - Total number of messages for idle nodes information
-    - Total number of state update signals (Sum of load and idle information messages)
+## Running Centralized and Switch controllers
+Run centralized controller with an input config:
+```
+./bin/horus-central-ctrl ./conf/horus-topology.toml
+```
+Open another shell to each switch and run the switch manager:
 
-## Todo
+```
+./bin/horus-switch-mgr -topo ./conf/horus-topology.toml
+```
 
-- [ ] XXX
-- [ ] XXX
-- [ ] XXX
+## Collecting Stats
+The switch controller reads the register data from dataplane from the ASIC to get overhead data. As control plane is orders of magnitude slower, these should be used to get values after a steady state and values in the middle of running experiment should not be relied on. We need to **stop the load generator first and after a few seconds stop the controller** to make sure the latest stats from the switch data plane is sampled by the controller. 
+
+**Horus Controller Manager Output**
+Upon exiting the horus-switch-mgr, it will automatically generate a JSON file in the format manager-stats-\<timestamp\>. 
+The reported statistics includes:
+
+- Total tasks arrived at leaf layer
+- Total resubmitted tasks at leaf layer
+- Total number of messages for load information
+- Total number of messages for idle nodes information
+- Total number of state update signals (Sum of load and idle information messages)
